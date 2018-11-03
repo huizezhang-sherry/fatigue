@@ -1,0 +1,27 @@
+﻿At the highest level of sport avoiding fatigue is crucial to success. The purpose of the project is to develop a method for measuring fatigue and use this method to study of evidence of fatigue in professional tennis.
+
+
+Research Questions
+
+
+1. What is a suitable model for fatigue in service speeds in a professional match?
+2. What is the extent and magnitude of fatigue in grand slam tennis?
+Data
+
+
+Point level outcomes for all points played at the 4 major events of the calendar: the Grand Slams. Each row corresponds to a point in a match and includes information about the server, receiver, speed of the serve, serve number and the point outcome.
+
+
+Method
+
+
+Bayesian hierarchical dose-response model
+
+
+References
+
+
+Burris, K., & Coleman, J. (2018). Out of gas: quantifying fatigue in MLB relievers. Journal of Quantitative Analysis in Sports, 14(2), 57-64.
+
+
+Kruschke, J. (2014). Doing Bayesian data analysis: A tutorial with R, JAGS, and Stan. Academic Press.
