@@ -32,7 +32,7 @@ dt <- dt %>% mutate(Gender = as.factor(ifelse(test = match_num <2000,yes = 'Male
 
 
 
-# gender= 1 if male, 2 if female
+# extract the top players for male and female: gender= 1 if male, 2 if female
 top_player <- function(gender,n=10){
   
   p1 <- dt %>% 
@@ -75,7 +75,6 @@ top_player <- function(gender,n=10){
     # select the top n as per argument 
     top_n(n)
 
-  
   return(player)
 }
 
@@ -91,34 +90,28 @@ extract_records <- function(name){
 }
 
 
+# extract records for Federer
 RF_all <- extract_records("Roger Federer")
 RF_all <- RF_all[!is.na(RF_all$match_id),]
 RF_all <- RF_all %>% mutate(Position = as.integer(ifelse(player1 == "Roger Federer", 1,2))) %>% 
   arrange(match_num)
 RF <- RF_all %>% filter(RF_all$ServeIndicator == RF_all$Position)
-RF <- RF %>% mutate(Count = seq(1,length(RF$SetNo),1))
+RF <- RF %>% mutate(Count = seq(1,length(RF$SetNo),1)) %>% filter(RF$ServeNumber != 0)
   
+# Extract DoubleFault data
 
 
-
-rf <- RF %>% filter(match_num == 1112)
-
-# all matches
-
-
-# issue: some player1 and player 2 are missing
-# match17 %>% filter(is.na(player1))
-# match17 %>% filter(is.na(player2))
-
-
-
-
-# ?? history, serve width, serve depth, return depth   
-
+DoubleFault<- RF_all %>% filter(RF_all$ServeNumber == 0) %>% mutate(Round = )
+DoubleFault <- DoubleFault %>% 
+  mutate(Count = seq(1,length(DoubleFault$SetNo),1)) %>% 
+  mutate(Round = (DoubleFault$match_num -1000) %/% 100)
 
 ```
 
-```{r plot, fig.height=15}
+```{r sample trial, fig.height=15}
+# sample for trial
+rf <- RF %>% filter(match_num == 1112)
+
 library(ggplot2)
 rf %>% filter(PointServer == 2) %>% dplyr::select(ElapsedTime,Speed_KMH) %>% plot()
 
@@ -138,18 +131,27 @@ ggplot(subset(rf,rf$SetNo == 4),aes(x=Count,y=Speed_KMH,col = SetNo)) +
 
 ```{r, fig.height=15}
 library(visdat)
-speed <- RF$Speed_KMH[!is.na(RF$Speed_KMH)]
 
 binomial_smooth <- function() {
   geom_smooth(method = "glm",family = "binomial",se = FALSE)
 }
 
-ggplot(RF,aes(x=Count,y=Speed_KMH,col = SetNo, group = SetNo)) +
-  ylim(min(summary(speed[speed != 0])),max(summary(speed[speed != 0])))+
-  geom_point() +
-  facet_wrap(~match_num,ncol = 1, scales = "free_x") 
+ggplot(RF,aes(x=Count,y=Speed_KMH,col = SetNo)) +
+  ylim(min(RF$Speed_KMH),max(RF$Speed_KMH))+
+  geom_point(aes(group = SetNo)) +
+  facet_wrap(~ServeNumber,ncol = 1, scales = "free_x") + 
+  geom_smooth(se = FALSE, col = "grey")+ 
+  scale_y_continuous("Speed (KPH)", breaks = scales::pretty_breaks(n = 10)) +
+	scale_x_continuous("Serve Count", breaks = scales::pretty_breaks(n = 10)) + 
+  theme(legend.position = "right", text = element_text(size = 16)) + 
+  ggtitle("Roger Federer Serving Speeds (Aus Open 2017)")
+
+
+ggplot(DoubleFault,aes(x = SetNo, fill = as.factor(SetNo))) +
+  geom_bar(aes(group = SetNo)) +
+  facet_wrap(~Round, nrow = 2)
   
-  
+
 #########ignore for the time being ############
 # match #1601 game 3, Federer suffered from break twice  
 
@@ -162,5 +164,13 @@ ggplot(RF,aes(x=Count,y=Speed_KMH,col = SetNo, group = SetNo)) +
 
 ```
 
+
+```{r}
+# model serving speed via dose-response model 
+library(drc)
+fit <-  drm(RF$Speed_KMH~RF$Count, fct = LL.5())
+
+
+```
 
 
