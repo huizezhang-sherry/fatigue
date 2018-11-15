@@ -167,10 +167,16 @@ ggplot(DoubleFault,aes(x = SetNo, fill = as.factor(SetNo))) +
 
 ```{r}
 # model serving speed via dose-response model 
+
+### drc fails because of convergence reason 
 library(drc)
-fit <-  drm(RF$Speed_KMH~RF$Count, fct = LL.5())
+fit_0 <-  drm(RF$Speed_KMH~RF$Count, fct = LL.4()) 
+mselect(fit, list(LL.3(), LL.5(), W2.4()))
 
 
+library(dr4pl)
+dr <- dr4pl(Speed_KMH~Count, data = RF)
+plot(dr)
 ```
 
 
