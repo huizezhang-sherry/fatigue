@@ -1,0 +1,62 @@
+---
+title: "Visualisation"
+author: "Huize Zhang"
+date: "21/11/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(visdat)
+```
+
+```{r}
+Federer <- extract_records("~/Documents/R/Tennis/data/2017-ausopen-matches.csv", "~/Documents/R/Tennis/data/2017-ausopen-points.csv", "Roger Federer")
+```
+
+Plot 1: This plot shows the serving speed of Federer in 2017 Australia Open by serving number. We can see that the speed of first and second serve is considerably different from each other, which motivates us to seperate the first and second serve data for modelling fatigue
+```{r}
+# First vs. Second serve speed
+ggplot(Federer,aes(x=Count,y=Speed_KMH,col= match_num)) +
+  ylim(min(Federer$Speed_KMH),max(Federer$Speed_KMH))+
+  geom_point() +
+  facet_grid(~ServeNumber,scales = "free_x") + 
+  scale_y_continuous("Speed (KPH)", breaks = scales::pretty_breaks(n = 10)) +
+  scale_x_continuous("Serve Count", breaks = scales::pretty_breaks(n = 10)) + 
+  theme(legend.position = "right", text = element_text(size = 16)) + 
+  ggtitle("Roger Federer Serving Speeds (Aus Open 2017)")
+```
+
+
+Plot 2: This histogram shows the serving speed for the first serve doesn't vary a lot for during the whole tournament while the second serve speed do varies and see the next plot for more details of change. 
+```{r}
+# Distribution of First vs. Second serve speed
+ggplot(Federer,aes(x=Speed_KMH,col = Round)) +
+  ylim(min(Federer$Speed_KMH),max(Federer$Speed_KMH))+
+  geom_density() +
+  facet_wrap(~ServeNumber, ncol = 1, scales = "free_x") + 
+  scale_y_continuous("Frequency", breaks = scales::pretty_breaks(n = 10)) +
+  scale_x_continuous("Speed (KPH)", breaks = scales::pretty_breaks(n = 10)) + 
+  theme(legend.position = "right", text = element_text(size = 16)) + 
+  ggtitle("Roger Federer Serving Speeds (Aus Open 2017)")
+```
+
+plot 3: As can be seen from this plot, as the tournament progresses from Round 2 to 4 to 6, Federer's serving speed is reducing, evidenced from the histogram  shifting towards the left.  
+```{r}
+# density shifting towards left as the progression of the Round#
+ggplot(subset(Federer,(ServeNumber == 2)&(Round == c(2,4,6))),
+       aes(x=Speed_KMH,col = Round)) +
+  ylim(min(Federer$Speed_KMH),max(Federer$Speed_KMH))+
+  geom_density(aes(fill = Round), alpha = 0.25) +
+  scale_y_continuous("Frequency", breaks = scales::pretty_breaks(n = 10)) +
+  scale_x_continuous("Speed (KPH)", breaks = scales::pretty_breaks(n = 10)) + 
+  theme(legend.position = "right", text = element_text(size = 16)) + 
+  ggtitle("Roger Federer Second Serving Speeds (Aus Open 2017)")
+
+
+```
+
+
+
