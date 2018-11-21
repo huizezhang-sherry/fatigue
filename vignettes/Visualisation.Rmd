@@ -29,7 +29,6 @@ ggplot(Federer,aes(x=Count,y=Speed_KMH,col= match_num)) +
   ggtitle("Roger Federer Serving Speeds (Aus Open 2017)")
 ```
 
-
 Plot 2: This histogram shows the serving speed for the first serve doesn't vary a lot for during the whole tournament while the second serve speed do varies and see the next plot for more details of change. 
 ```{r}
 # Distribution of First vs. Second serve speed
