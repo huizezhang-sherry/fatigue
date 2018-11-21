@@ -16,7 +16,7 @@ Federer <- extract_records("~/Documents/R/Tennis/data/2017-ausopen-matches.csv",
 ```
 
 ```{r}
-# Cobs model by match_num
+# Cobs model by match_num 
 library(cobs)
 fit_cbs_match=c()
 for (i in levels(Federer$match_num)){
