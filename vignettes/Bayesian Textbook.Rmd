@@ -1,0 +1,8 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This book is about determining exactly how much more strongly we should believe that the bias is 20%.
+
+One of the nice qualities of Bayesian model comparison is that it intrinsically adjusts for model complexity. More complex models will fit data better than simple models, merely because the complex models have more flexibility. Unfortunately, more complex models will also fit random noise better than simpler models. We are interested in the model that best fits the real trends in the data, not just the model that best fits the noise. As we will see in later chapters, Bayesian methods naturally take into account the complexity of model.

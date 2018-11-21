@@ -1,0 +1,92 @@
+---
+title: "Cobs"
+author: "Huize Zhang"
+date: "21/11/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+library(tidyverse)
+Federer <- extract_records("~/Documents/R/Tennis/data/2017-ausopen-matches.csv", "~/Documents/R/Tennis/data/2017-ausopen-points.csv", "Roger Federer")
+```
+
+```{r}
+# Cobs model by match_num
+library(cobs)
+fit_cbs_match=c()
+for (i in levels(Federer$match_num)){
+  cbs <-  cobs(y = Federer[(Federer$ServeNumber == 2)&(Federer$match_num==i),]$Speed_KMH, 
+               x=Federer[(Federer$ServeNumber == 2)&(Federer$match_num==i),]$Count,
+             constraint= "increase")
+  for (j in Federer[(Federer$ServeNumber == 2)&(Federer$match_num==i),]$Count){
+    fit_cbs_match[j]<-predict(cbs,z =j)[,2]
+  } 
+}
+ 
+fit_cbs_match <- fit_cbs_match[!is.na(fit_cbs_match)]
+
+
+ggplot(subset(Federer,ServeNumber == 2),aes(x=Count,color = Round)) +
+  geom_point(aes(y=Speed_KMH),size = 2) +
+  geom_line(aes(y=fit_cbs_match), size = 2) +
+  scale_y_continuous("Speed (KPH)", breaks = scales::pretty_breaks(n = 20)) +
+	scale_x_continuous("Count", breaks = scales::pretty_breaks(n = 10)) + 
+  theme(legend.position = "right", text = element_text(size = 16)) + 
+  ggtitle("Roger Federer Second Serving Speeds (Aus Open 2017)")
+
+# Federer's tiredness by Round 
+```
+
+```{r}
+# Cobs model by setNo
+fit_cbs_set = c()
+for (i in levels(as.factor(Federer$SetNo))){
+  cbs <-  cobs(y = Federer[(Federer$ServeNumber == 2)&(Federer$SetNo==i),]$Speed_KMH, 
+               x=Federer[(Federer$ServeNumber == 2)&(Federer$SetNo==i),]$Count,
+             constraint= "increase")
+  for (j in Federer[(Federer$ServeNumber == 2)&(Federer$SetNo==i),]$Count){
+    fit_cbs_set[j]<-predict(cbs,z =j)[,2]
+  } 
+}
+
+fit_cbs_set <- fit_cbs_set[!is.na(fit_cbs_set)]
+
+
+ggplot(subset(Federer,(ServeNumber == 2)),aes(x=Count, y=fit_cbs_set,col = SetNo)) +
+  geom_line()+
+  facet_wrap(~SetNo)+
+  scale_y_continuous("Speed (KPH)", breaks = scales::pretty_breaks(n = 10)) +
+	scale_x_continuous("Count", breaks = scales::pretty_breaks(n = 10)) + 
+  theme(legend.position = "right", text = element_text(size = 16)) + 
+  ggtitle("Roger Federer Second Serving Speeds (Aus Open 2017)")
+  
+# As can be seen from the plot, Federer only shows fatigue (tiredness) as the game proceeds to the fifth set. 
+```
+
+Plot 1: 
+```{r}
+
+```
+
+```{r}
+
+  
+library(mgcv)
+ggplot(subset(Federer,(ServeNumber == 2)),aes(x=Count,y = Speed_KMH, col = Round)) +
+  geom_point(size = 2) +
+  #geom_smooth(se = FALSE)+
+  #geom_smooth(method = "lm", formula = y~bs(x, df= 3))+
+  #geom_smooth(method = "gam", formula = y~s(x, m=2)) + 
+  #geom_smooth(method = "lm", formula = y~ns(x, df= 2)) +
+  scale_y_continuous("Speed (KPH)", breaks = scales::pretty_breaks(n = 20)) +
+	scale_x_continuous("Count", breaks = scales::pretty_breaks(n = 10)) + 
+  theme(legend.position = "right", text = element_text(size = 16)) + 
+  ggtitle("Roger Federer Second Serving Speeds (Aus Open 2017)")
+
+```
+
