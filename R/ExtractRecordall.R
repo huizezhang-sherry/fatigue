@@ -32,3 +32,4 @@ extract_records_all <- function(dt1, dt2, name){
 
 Federer = extract_records_all("data/2017-ausopen-matches.csv", "data/2017-ausopen-points.csv", "Roger Federer")
 Nadal = extract_records_all("data/2017-ausopen-matches.csv", "data/2017-ausopen-points.csv", "Rafael Nadal")
+Alex =extract_records_all("data/2017-ausopen-matches.csv", "data/2017-ausopen-points.csv", "Alexander Zverev")
