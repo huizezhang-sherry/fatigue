@@ -10,6 +10,9 @@ knitr::opts_chunk$set(echo = TRUE)
 library(drc)
 library(sandwich)
 library(lmtest)
+library(tidyverse)
+
+Federer = extract_records_all("../data/2017-ausopen-matches.csv","../data/2017-ausopen-points.csv", "Roger Federer")
 ```
 
 ```{r}
@@ -35,6 +38,8 @@ library(lmtest)
 ```
 
 The current problem faced when fitting a dose-response model is that the evidence of fatigue (reduction of serving speed) is not very obvious. For the three set of data manipulated below, only the second df produce a downward sloping dose-response curve. 
+
+The last df, which is group_by SetNo fitts the dose-response model quite nice (dr4pl)
 ```{r}
 df <- Federer %>% group_by(game) %>% 
   dplyr::select(game,Speed_KMH) %>% 
@@ -54,31 +59,71 @@ df <- Federer %>% group_by(game) %>%
 #   summarise(mean_speed = mean(Speed_KMH)) %>% 
 #   filter(game > 250) %>% mutate(game = game - 257)
 
-
-
+df <- Federer %>% group_by(SetNo) %>% 
+  dplyr::select(SetNo, Speed_KMH) %>% 
+  filter(Speed_KMH != 0) %>% 
+  summarise(mean_speed = mean(Speed_KMH)) %>% 
+  mutate(SetNo = as.numeric(SetNo)) %>% 
+  mutate(mean_speed = as.numeric(mean_speed))
+df
 ```
 
-Dose-response model via drc package
+Dose-response model via drc package. If meet convergence problem, use dr4pl
 ```{r}
-model <- drm(df$mean_speed~df$game, fct = LL.4())
+model <- drm(df$mean_speed~df$SetNo, fct = LL.4())
 summary(model)
 # adjust the std. error by sandwich package
 coeftest(model, vcov = sandwich)
 ED(model, 50, interval = "delta")
 plot(model, broken = TRUE, type = "all", xlim = c(1, 20))
-plot(df$game, predict(model))
+plot(df$SetNo, predict(model))
 
 ```
 
 dr4pl also produces dose-response model as drc package. It sometimes works better than drc when there's convergence problem with drc
 ```{r}
 library(dr4pl)
-m <- dr4pl(response = log(df$mean_speed), dose = df$game, method.init = "logistic", trend = "decreasing")
+m <- dr4pl(response = df$mean_speed, dose = df$SetNo, method.init = "logistic", trend = "decreasing")
 summary(m)
 plot(m)
-plot(MeanResponse(x = df$game,theta = m$parameters))
-values <- IC(m, c(95,90,85))
+values <- IC(m, c(95,90,80,50))
 values
 
 ```
+
+Dose Response model only allows for one x variable dose (although it allows for multiple response value for one particular dose). 
+We want to incorporate in more variables (rest, running distance) to model the spped_KMH, so move to the glm model. 
+-- still building ---
+```{r}
+f_dose <- dose(Federer %>% 
+                 filter(match_num != 1601) %>% 
+                 filter(Speed_KMH !=0))
+
+df <- Federer %>% filter(match_num != 1601) %>% 
+  filter(Speed_KMH != 0) %>% 
+  mutate(rest = cumsum(f_dose)) %>% 
+  mutate(dist= ifelse(player1 ==" Roger Federer", P1DistanceRun, P2DistanceRun)) %>% 
+  mutate(distance = cumsum(dist)) %>% 
+  dplyr::select(round, SetNo, game, Speed_KMH,rest, dist, distance) 
+df
+
+# could use sum(distance)
+game <- df %>% group_by(game) %>% 
+  summarise(speed = mean(Speed_KMH), rest = max(rest), distance = max(distance))
+
+set <- df %>% group_by(SetNo) %>% 
+  summarise(speed = mean(Speed_KMH), rest = max(rest), distance = max(distance))
+
+match <- df %>% group_by(round) %>% 
+  summarise(speed = mean(Speed_KMH), rest = max(rest), distance = mean(distance))
+
+
+library(visreg)
+fit <- glm(speed ~rest + distance,data = match,family = Gamma())
+summary(fit)
+visreg(fit, "distance", gg=TRUE) + theme_bw()
+anova(fit,"chisq")
+
+```
+
 
