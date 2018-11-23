@@ -32,5 +32,6 @@ summary(Mrs)
 # By introducing the nested random effect, there's significant improvement from the Ms model (p=0.06281), while it doesn't seem to improve the Mr model much (p=0.974). Based on this, we would reckon that the variation of serving speed can be adequately captured by the round information and adding the interactive random effect between round and set will not improve the model as we expected. 
 anova(Mr, Mrs)
 anova(Ms, Mrs)
+
 ```
 
