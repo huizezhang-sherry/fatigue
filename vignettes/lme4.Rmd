@@ -1,0 +1,36 @@
+---
+title: "lme4"
+author: "Huize Zhang"
+date: "23/11/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(lme4)
+library(tidyverse)
+Federer$SetNo <- as.factor(Federer$SetNo)
+
+# exclude Round 6 with Warinka because most of the running data is missing 
+# f <- Federer %>% filter(round != 6) %>% mutate(distance = as.numeric(ifelse(player1 == "Roger Federer", P1DistanceRun, P2DistanceRun)))
+
+lm <- lm(Speed_KMH~ distance + SetNo + match_num, data = Federer)
+summary(lm)
+
+Mr <- lmer(Speed_KMH ~ 1 +  (1 |round), data = Federer)
+summary(Mr)
+
+Ms <- lmer(Speed_KMH~ 1 + (1 |SetNo), data = Federer)
+summary(Ms)
+
+Mrs <- lmer(Speed_KMH~ 1  + (1|round/SetNo), data = Federer)
+summary(Mrs)
+
+# By introducing the nested random effect, there's significant improvement from the Ms model (p=0.06281), while it doesn't seem to improve the Mr model much (p=0.974). Based on this, we would reckon that the variation of serving speed can be adequately captured by the round information and adding the interactive random effect between round and set will not improve the model as we expected. 
+anova(Mr, Mrs)
+anova(Ms, Mrs)
+```
+
