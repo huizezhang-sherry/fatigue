@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(readr)
 library(tidyverse)
-Federer <- extract_records("~/Documents/R/Tennis/data/2017-ausopen-matches.csv", "~/Documents/R/Tennis/data/2017-ausopen-points.csv", "Roger Federer")
+Federer <- extract_records("../data/2017-ausopen-matches.csv", "../data/2017-ausopen-points.csv", "Roger Federer")
 ```
 
 ```{r}
