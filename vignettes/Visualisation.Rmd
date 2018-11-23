@@ -8,12 +8,12 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-library(ggplot2)
+library(tidyverse)
 library(visdat)
 ```
 
 ```{r}
-Federer <- extract_records("~/Documents/R/Tennis/data/2017-ausopen-matches.csv", "~/Documents/R/Tennis/data/2017-ausopen-points.csv", "Roger Federer")
+Federer <- extract_records("../data/2017-ausopen-matches.csv", "../data/2017-ausopen-points.csv", "Roger Federer")
 ```
 
 Plot 1: This plot shows the serving speed of Federer in 2017 Australia Open by serving number. We can see that the speed of first and second serve is considerably different from each other, which motivates us to seperate the first and second serve data for modelling fatigue
