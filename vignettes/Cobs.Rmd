@@ -39,7 +39,7 @@ ggplot(subset(Federer,ServeNumber == 2),aes(x=Count,color = Round)) +
   theme(legend.position = "right", text = element_text(size = 16)) + 
   ggtitle("Roger Federer Second Serving Speeds (Aus Open 2017)")
 
-# Federer's tiredness by Round 
+
 ```
 
 ```{r}
@@ -68,14 +68,8 @@ ggplot(subset(Federer,(ServeNumber == 2)),aes(x=Count, y=fit_cbs_set,col = SetNo
 # As can be seen from the plot, Federer only shows fatigue (tiredness) as the game proceeds to the fifth set. 
 ```
 
-Plot 1: 
-```{r}
-
-```
 
 ```{r}
-
-  
 library(mgcv)
 ggplot(subset(Federer,(ServeNumber == 2)),aes(x=Count,y = Speed_KMH, col = Round)) +
   geom_point(size = 2) +
