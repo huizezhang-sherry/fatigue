@@ -25,7 +25,8 @@ extract_records_all <- function(dt1, dt2, name){
     mutate(match_num = as.factor(dt$match_num)) %>% 
     mutate(round = as.numeric(substr(match_id, 15, 15))) %>% 
     mutate(set_ = as.integer(ifelse(dt$SetWinner ==0, 0, 1))) %>% 
-    mutate(index = as.numeric(paste(match_num,SetNo, sep = "")))
+    mutate(index = as.numeric(paste(match_num,SetNo, sep = ""))) %>% 
+    mutate(dist= ifelse(player1 == name, P1DistanceRun, P2DistanceRun))
   
   dt <- dt %>% 
     mutate(game = as.integer(cumsum(dt$game_)+1))
@@ -33,6 +34,6 @@ extract_records_all <- function(dt1, dt2, name){
   return(dt)
 }
 
-Federer = extract_records_all("../data/2017-ausopen-matches.csv", "../data/2017-ausopen-points.csv", "Roger Federer")
-Nadal = extract_records_all("../data/2017-ausopen-matches.csv", "../data/2017-ausopen-points.csv", "Rafael Nadal")
-Alex =extract_records_all("../data/2017-ausopen-matches.csv", "../data/2017-ausopen-points.csv", "Alexander Zverev")
+# Federer = extract_records_all("../data/2017-ausopen-matches.csv", "../data/2017-ausopen-points.csv", "Roger Federer")
+# Nadal = extract_records_all("../data/2017-ausopen-matches.csv", "../data/2017-ausopen-points.csv", "Rafael Nadal")
+# Alex =extract_records_all("../data/2017-ausopen-matches.csv", "../data/2017-ausopen-points.csv", "Alexander Zverev")
