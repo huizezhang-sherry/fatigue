@@ -19,14 +19,17 @@ extract_records_all <- function(dt1, dt2, name){
   
   # Create new variables
   dt <- dt %>% 
-    mutate(point = seq(1,length(dt$SetNo),1)) %>% 
+    mutate(index = seq(1,length(dt$SetNo),1)) %>% 
     mutate(game_ = as.integer(ifelse(dt$GameWinner == 0,0,1))) %>% 
     mutate(round = as.factor((dt$match_num - 1000) %/% 100)) %>% 
     mutate(match_num = as.factor(dt$match_num)) %>% 
     mutate(round = as.numeric(substr(match_id, 15, 15))) %>% 
     mutate(set_ = as.integer(ifelse(dt$SetWinner ==0, 0, 1))) %>% 
-    mutate(index = as.numeric(paste(match_num,SetNo, sep = ""))) %>% 
-    mutate(dist= ifelse(player1 == name, P1DistanceRun, P2DistanceRun))
+    mutate(index_set = as.numeric(paste(match_num,SetNo, sep = ""))) %>% 
+    mutate(dist= ifelse(player1 == name, P1DistanceRun, P2DistanceRun)) %>% 
+    mutate(GameNo = as.factor(ifelse(GameNo>=10, GameNo,paste("0",GameNo,sep = "")))) %>% 
+    mutate(index_game = (paste(match_num,SetNo,GameNo, sep = "")))
+  
   
   dt <- dt %>% 
     mutate(game = as.integer(cumsum(dt$game_)+1))
