@@ -1,0 +1,130 @@
+---
+title: "multivariate_spline"
+author: "Huize Zhang"
+date: "28/11/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(splines)
+library(tidyverse)
+library(ggplot2)
+library(purrr)
+library(data.table)
+```
+
+```{r}
+Federer <- extract_records_all("data/2017-ausopen-matches.csv", 
+                               "data/2017-ausopen-points.csv", 
+                               "Roger Federer")
+Nadal = extract_records_all("data/2017-ausopen-matches.csv",
+                            "data/2017-ausopen-points.csv", "Rafael Nadal")
+Alex =extract_records_all("data/2017-ausopen-matches.csv",
+                          "data/2017-ausopen-points.csv", "Alexander Zverev")
+
+# f_sub <- f %>% filter(match_num ==1112, SetNo ==1)
+# y <- f_sub$Speed_KMH
+
+```
+
+```{r}
+# loop around for the coefficients
+coef <- function(dt){
+  dt_s<- split(dt, as.numeric(dt$index_game))
+  fit <- function(data) lm(Speed_KMH~index,data = data)
+  model <- map(dt_s,fit)
+  coeffient <- function(model)  round(model$coefficients[2],3)
+  coefficient <- transpose(map_df(model, coeffient))
+  coefficient <- coefficient %>% mutate(index_game =as.numeric(unique(dt$index_game))) 
+  count <- dt %>% group_by(index_game) %>% count() %>% as.data.frame()
+  coef <- merge(count,coefficient)
+  colnames(coef)[3] <- "coef"
+  return(coef)
+}
+
+c_f <- coef(Federer)
+c_n <- coef(Nadal)
+c_a <- coef(Alex)
+c_n$index_game
+
+ggplot(subset(c_n,n<=12), aes(y = n, x=coef))+
+  geom_point()+
+  ylim(4,12)
+
+table(c_a$n)
+sum(c_f$n>10)/nrow(c_f)
+sum(c_n$n>12)/nrow(c_n)
+sum(c_a$n>10)/nrow(c_a)
+
+ggplot(subset(c_a,n<=10), aes(y = n, x=coef))+
+  geom_point()+
+  ylim(4,12)
+
+ggplot(subset(c_f,n<=10), aes(y = n, x=coef))+
+  geom_point()+
+  ylim(4,12)
+
+c_f %>% group_by(n) %>% summarise(mean = mean(coef))  
+c_n %>% group_by(n) %>% summarise(mean = mean(coef))  
+c_a %>% group_by(n) %>% summarise(mean = mean(coef))  
+table(coef$n)
+coef$index_game[coef$n==max(coef$n)]
+t <- f %>% filter(index_game ==coef$index_game[coef$n==max(coef$n)])
+fit_point <- lm(y~ns(f_sub$point,df = length(unique(f_sub$GameNo))))
+summary(fit_point)
+library(broom)
+tidy(fit_point)
+glance(fit_point)
+aug <- augment(fit_point,f_sub)
+aug
+
+min = min(aug$Speed_KMH)
+
+max = max(aug$Speed_KMH)
+library(ggplot2)
+ggplot(aug, aes(x = Speed_KMH)) + 
+  geom_point(aes(y = .fitted)) + 
+  theme(aspect.ratio = 1) + 
+  geom_line(aes(y = y)) + 
+  ylim(150,max) +
+  xlim(150,max)
+  
+
+p_1 <- p %>% group_by(match_id, SetNo,GameNo) %>% filter(match_id == "2017-ausopen-1601", SetNo ==4, GameNo ==5)
+
+fit_point$fitted.values
+fit_point$residuals
+
+ggplot(subset(f, (match_num ==1112)&(SetNo ==1)),
+       aes(x=point,y = Speed_KMH, col = index_game, group = index_game)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", formula = y~x)+
+  scale_y_continuous("Speed (KPH)", breaks = scales::pretty_breaks(n = 20)) +
+	scale_x_continuous("Count", breaks = scales::pretty_breaks(n = 10)) + 
+  theme(legend.position = "right", text = element_text(size = 16)) + 
+  ggtitle("Roger Federer Second Serving Speeds (Aus Open 2017)")
+
+summary(f$GameNo[f$match_num ==1112])
+
+```
+
+
+```{r}
+fit <- lm(f$Speed_KMH~ns(f$point, df = length(unique(f$index_game))))
+summary(fit)
+
+dt <- subset(f, (SetNo == c(1,2))&(match_num == 1112))
+ggplot(dt,
+       aes(x=point,y = Speed_KMH, col = GameNo, group = GameNo)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", formula = y~ns(x,df = length(unique(dt$GameNo))))+
+  scale_y_continuous("Speed (KPH)", breaks = scales::pretty_breaks(n = 20)) +
+	scale_x_continuous("Count", breaks = scales::pretty_breaks(n = 10)) + 
+  theme(legend.position = "right", text = element_text(size = 16)) + 
+  ggtitle("Roger Federer Second Serving Speeds (Aus Open 2017)")
+
+```
+
