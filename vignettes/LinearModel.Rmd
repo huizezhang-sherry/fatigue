@@ -16,23 +16,36 @@ library(purrr)
 library(data.table)
 ```
 
-```{r}
+```{r loading_data}
+name <- list("Roger Federer","Rafael Nadal", "Alexander Zverev","Milos Raonic","John Isner")
+
+dt <- map_df(name,)
+
 Federer <- extract_records_all("data/2017-ausopen-matches.csv", 
-                               "data/2017-ausopen-points.csv", 
-                               "Roger Federer")
+                               "data/2017-ausopen-points.csv", "Roger Federer")
 Nadal = extract_records_all("data/2017-ausopen-matches.csv",
                             "data/2017-ausopen-points.csv", "Rafael Nadal")
 Alex =extract_records_all("data/2017-ausopen-matches.csv",
                           "data/2017-ausopen-points.csv", "Alexander Zverev")
+Raonic <- extract_records_all("data/2017-ausopen-matches.csv",
+                          "data/2017-ausopen-points.csv", "Milos Raonic")
+Isner <- extract_records_all("data/2017-ausopen-matches.csv",
+                          "data/2017-ausopen-points.csv", "John Isner")
+Nishikori <- extract_records_all("data/2017-ausopen-matches.csv",
+                          "data/2017-ausopen-points.csv", "Kei Nishikori")
 
-# f_sub <- f %>% filter(match_num ==1112, SetNo ==1)
-# y <- f_sub$Speed_KMH
 
 ```
 
 ```{r}
-# loop around for the coefficients
-coef <- function(dt){
+F17 <- extract_records_all("data/2017-ausopen-matches.csv", 
+                               "data/2017-ausopen-points.csv", "Roger Federer")
+```
+
+
+```{r}
+# function for extracting coefficients
+coef <- function(dt, name){
   dt_s<- split(dt, as.numeric(dt$index_game))
   fit <- function(data) lm(Speed_KMH~index,data = data)
   model <- map(dt_s,fit)
@@ -40,15 +53,26 @@ coef <- function(dt){
   coefficient <- transpose(map_df(model, coeffient))
   coefficient <- coefficient %>% mutate(index_game =as.numeric(unique(dt$index_game))) 
   count <- dt %>% group_by(index_game) %>% count() %>% as.data.frame()
-  coef <- merge(count,coefficient)
+  coef <- merge(count,coefficient) %>% mutate(player = name)
   colnames(coef)[3] <- "coef"
   return(coef)
 }
 
-c_f <- coef(Federer)
-c_n <- coef(Nadal)
-c_a <- coef(Alex)
-c_n$index_game
+dt <- list(Federer, Nadal, Alex, Raonic, Isner)
+name <- list("Roger Federer","Rafael Nadal", "Alexander Zverev","Milos Raonic","John Isner")
+
+coefficient <- map2_df(player,name, coef)
+
+c <- coefficient %>% group_by(player, n) %>% summarise(mean_coef = mean(coef))
+ggplot(c, aes(y = mean_coef, x = n, col = player, group = player))+
+  geom_point()+
+  geom_line()
+
+
+
+ggplot(subset(c_r,n<=12), aes(y = n, x=coef))+
+  geom_point()+
+  ylim(4,12)
 
 ggplot(subset(c_n,n<=12), aes(y = n, x=coef))+
   geom_point()+
@@ -61,15 +85,18 @@ sum(c_a$n>10)/nrow(c_a)
 
 ggplot(subset(c_a,n<=10), aes(y = n, x=coef))+
   geom_point()+
-  ylim(4,12)
+  ylim(4,10)
+
+ggplot(subset(c_i,n<=10), aes(y = n, x=coef))+
+  geom_point()+
+  ylim(4,10)
 
 ggplot(subset(c_f,n<=10), aes(y = n, x=coef))+
   geom_point()+
   ylim(4,12)
 
-c_f %>% group_by(n) %>% summarise(mean = mean(coef))  
-c_n %>% group_by(n) %>% summarise(mean = mean(coef))  
-c_a %>% group_by(n) %>% summarise(mean = mean(coef))  
+
+
 table(coef$n)
 coef$index_game[coef$n==max(coef$n)]
 t <- f %>% filter(index_game ==coef$index_game[coef$n==max(coef$n)])
