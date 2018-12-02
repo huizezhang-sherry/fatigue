@@ -1,0 +1,86 @@
+Federer: dataset about Federer's performance of 2027 auopen 
+match_id: contain information of the year, slam name and match_num
+slam: one of the four slams (ausopen, frenchopen, usopen, wimbledon)
+match_num: the number of each match
+player1: player1
+player2: player2
+status: 
+winner 
+event_name
+round: numerical value of the current round number
+court_name: 
+court_id:
+player1id:
+player2id: 
+nation2: 
+nation2:
+ElaspsedTime: the time when the point is played
+SetNo: numerical value of the current set number
+P1GamesWon: numerical value of the number of game player 1 won
+P2GamesWon: numerical value of the number of game player 2 won
+SetWinner: dummy variable indicating the player who wins the current set when a set is finished
+GameNo: numerical value of the current game number
+GameWinner: dummy variable indicating the player who wins the current game when a game is finished
+PointNumer: numerical value of the current point number
+PointWinner: dummy variable indicating the player who wins the current point when a point is finished
+PointServer: the player who serves the point (1: player 1, 2: player2)
+Speed_KMH: the serving speed of the current point in kilometer per hour 
+Rally: 
+P1Score: the current score of Player 1
+P2Score: the current score of Player 2
+P1Momentum:
+P2Momentum:
+P1PointsWon: the cumulated point won by player 1
+P2PointsWon: the cumulated point won by player 2
+P1Ace: dummy variable indicating this point is an Ace
+P2Ace: dummy variable indicating this point is an Ace
+*P1Winner: dummy variable indicating the winning point by P1
+*P2Winner: dummy variable indicating the winning point by P2
+P1DoubleFault: dummy variable indicating this point is a double fault point played by P1
+P2DoubleFault: dummy variable indicating this point is a double fault point played by P2
+P1UnfErr: dummy variable indicating this point is an unforced Error played by P1
+P2UnfErr: dummy variable indicating this point is an unforced Error played by P2
+P1NetPoint: dummy variable indicating when this point is still playing, player 1 touches any part of the net 
+P2NetPoint: dummy variable indicating when this point is still playing, player 2 touches any part of the net 
+P1NetPointWon: dummy variable indicating the point is a net point and Player 1 win the point 
+P2NetPointWon: dummy variable indicating the point is a net point and Player 2 win the point 
+P1BreakPoint: dummy variable indicating this point is a break point by player 1
+P2BreakPoint: dummy variable indicating this point is a break point by player 2
+P1BreakPointWon: dummy varaible indicating ghtis poitn is a break point and Player 1 won 
+P2BreakPointWon: dummy varaible indicating ghtis poitn is a break point and Player 2 won
+P1FirstSrvIn
+P2FirstSrvIn
+P1FristSrvWon
+P2FristSrvWon
+P1SecondSrvIn
+P2SecondSrvIn
+P1SecondSrvWon
+P2SecondSrvWon
+P1ForcedError
+P2ForcedError
+History:
+Speed_MPH: speed of serve in miles per hour
+P1BreakPointMissed: the break point missed by player 1
+P2BreakPointMissed: the break point missed by player 2
+ServeIndicator: numerical value indicating if the point is served by player 1 or 2
+Serve_Direction
+Winner_FH
+Winner_BH
+WervingTO
+P1TurningPoint
+P2TurningPoint
+ServeNumer: numerical value indicating if the serve is a first serve or a second serve 
+WinnerType: 
+WinnerShotType:
+P1DistanceRun: cummulated distance run by Player 1
+P2DistanceRun: cummulated distance run by Player 2
+RallyCount: number of Rally played in a game
+ServeWidth: five possible values of "C"  "BC" "W"  "B"  "BW" 
+ServeDepth: two possible values of "CTL"  "NCTL"
+ReturnDepth: two possible values of "D"  "ND"
+Gender: factor indicating if the game is for male(1) or female(2)
+Index_point: an index for each point
+game_: dummy variable marking the position of the end of each game 
+set_: dummy variable marking the position of the end of each set
+index_set: an index that includes information of match number and set number 
+index_game: an index that includes infomration of match number, set number and game number 
