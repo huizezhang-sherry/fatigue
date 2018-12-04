@@ -1,3 +1,7 @@
+
+load("data/atp_importance.RData")
+
+
 point_impt <- function(dt){
   temp <- dt
   temp$P1Score <- ifelse(temp$P1Score ==0,0,
@@ -29,6 +33,7 @@ point_impt <- function(dt){
   
   temp3 <- temp3 %>% 
     mutate(id = paste(serve_point, return_point, serve_game, return_game, serve_set, return_set, sep = ""))
+  
   
   importance <- atp_importance$importance[match(temp3$id, atp_importance$id)]
   
