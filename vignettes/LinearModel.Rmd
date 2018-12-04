@@ -35,6 +35,7 @@ Raonic <- extract_records_all("data/2017-ausopen-matches.csv",
 ```{r}
 # function for linear model 
 fit <- function(data) lm(Speed_KMH~index_point,data = data)
+#fit <- function(data) lm(Speed_KMH~index_point + impt + dist,data = data)
 
 # create a list of dataset interested 
 player_dt<- list(Federer, Nadal, Alex, Raonic)
