@@ -26,7 +26,7 @@ extract_records_all <- function(dt1, dt2, name){
     mutate(round = as.numeric(substr(match_id, 15, 15))) %>% 
     mutate(set_ = as.integer(ifelse(dt$SetWinner ==0, 0, 1))) %>% 
     mutate(index_set = as.numeric(paste(match_num,SetNo, sep = ""))) %>% 
-    #mutate(dist= ifelse(player1 == name, P1DistanceRun, P2DistanceRun)) %>% 
+    mutate(dist= ifelse(player1 == name, P1DistanceRun, P2DistanceRun)) %>% 
     mutate(GameNo = as.factor(ifelse(GameNo>=10, GameNo,paste("0",GameNo,sep = "")))) %>% 
     mutate(index_game = (paste(match_num,SetNo,GameNo, sep = "")))
   
