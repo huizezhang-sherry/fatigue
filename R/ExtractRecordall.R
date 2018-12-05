@@ -19,7 +19,7 @@ extract_records_all <- function(dt1, dt2, name){
   
   # Create new variables
   dt <- dt %>% 
-    mutate(index_point = seq(1,length(dt$SetNo),1)) %>% 
+    #mutate(index_point = seq(1,length(dt$SetNo),1)) %>% 
     mutate(game_ = as.integer(ifelse(dt$GameWinner == 0,0,1))) %>% 
     mutate(round = as.factor((dt$match_num - 1000) %/% 100)) %>% 
     mutate(match_num = as.factor(dt$match_num)) %>% 
