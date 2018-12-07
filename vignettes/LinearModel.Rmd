@@ -15,6 +15,7 @@ library(tidyverse)
 library(ggplot2)
 library(purrr)
 library(broom)
+library(gridExtra)
 
 ```
 
@@ -31,62 +32,151 @@ Raonic <- extract_records_all("data/2017-ausopen-matches.csv",
                           "data/2017-ausopen-points.csv", "Milos Raonic")
 ```
 
-
 ```{r}
-# function for linear model 
-fit <- function(data) lm(Speed_KMH~index_point,data = data)
-#fit <- function(data) lm(Speed_KMH~index_point + impt + dist,data = data)
+library(tidyverse)
+library(broom)
 
+```
+
+
+```{r functions_used}
+# clean the data: adding new variables created by functions in R folder 
+clean_data<- function(dt, name) {
+  dt %>% 
+    mutate(name = name) %>% 
+    mutate(rest = rest(dt)) %>% 
+    mutate(impt = point_impt(dt)) %>% 
+    # filter the double fault points
+    filter(Speed_KMH != 0) %>%  
+    # filter the point serve by the player interested 
+    filter(ServeIndicator == ifelse(player1 == name, 1,2)) %>% 
+    select(PointNumber,impt,dist,rest,time,MatchNo, 
+           ServeNumber, name, Speed_KMH, cum_time)
+}
+
+# linear model 
+fit_lm <- function(data) lm(Speed_KMH~ 
+                              PointNumber+ impt + dist + rest + time +cum_time +MatchNo,
+                            data = data)
+# This one looks to work better - investigate next week
+# fit_lm <- function(data) lm(Speed_KMH~ 
+#                               PointNumber+ impt + dist + rest + time +cum_time +
+#                               as.factor(MatchNo),
+#                             data = data)
+# mixed effect model 
+library(lme4)
+fit_lmer <- function(data) lmer(Speed_KMH~
+                                  PointNumber + impt + dist + rest + time + cum_time +
+                                  (1|MatchNo), 
+                                data = data)
+
+build_linear_model <- function(dt, fit){
+  by_player_fit <- dt %>% 
+    group_by(name) %>% 
+    nest() %>% 
+    mutate(model = map(data, fit)) 
+  return(by_player_fit)
+}
+
+fetch_coef <- function(dt){
+  player_coef_fit <- dt %>%
+    unnest(model %>% map(tidy)) %>%
+    select(name, term,estimate) %>%
+    spread(term, estimate)
+}
+```
+
+```{r compute_models}
 # create a list of dataset interested 
 player_dt<- list(Federer, Nadal, Alex, Raonic)
 
 # create a list of player's name
 name <- list("Roger Federer","Rafael Nadal", "Alexander Zverev","Milos Raonic")
 
-# clean the data: filter out DoubleFault and rows serve by the player interested 
-clean_data<- function(dt, name) {
-  dt %>% filter(Speed_KMH != 0) %>% 
-    filter(ServeIndicator == ifelse(player1 == name, 1,2)) %>% 
-    mutate(name = name)
-}
-
 # clean the palyer_dt
 player_dt <- map2_df(player_dt, name, clean_data)
+# split by first and second serve 
+player_dt <- split(player_dt,player_dt$ServeNumber)
+firstServe <- player_dt[[1]] 
+SecondServe <- player_dt[[2]]
 
-# build linear model
-by_player <- player_dt %>% 
-  group_by(name, index_set) %>% 
-  nest() %>% 
-  mutate(model = map(data, fit)) 
 
-# extrac the intercept and slope of the linear model
-player_coef <- by_player %>%   
-  unnest(model %>% map(tidy))%>% 
-  select(name, index_set, term, estimate) %>% 
-  spread(term, estimate)
+# compute the coefficient, fit-statistics for linear&mixed effect model for the first serve dt
+firstserve_lm <- build_linear_model(firstServe, fit_lm) %>% 
+  mutate(servenumber =as.factor(1)) 
+firstserve_lmer <- build_linear_model(firstServe, fit_lmer) %>% 
+  mutate(servenumber =as.factor(1))
+firstserve_coef <- firstserve%>% fetch_coef()
+firstserve_aug_lm <- firstserve_lm %>% unnest(model %>% map(augment))
+firstserve_aug_lmer <- firstserve_lmer %>% unnest(model %>% map(augment))
+firstserve_fit_lm <- firstserve_lm %>% unnest(model%>% map(glance))
 
-player_model <- by_player %>% unnest(model %>% map(augment))
 
-ggplot(player_model, 
-       aes( x = index_point, y=Speed_KMH)) +
+# compute the coefficient, fit-statistics for linear&mixed effect model for the second serve dt
+secondserve_lm <- build_linear_model(SecondServe, fit_lm) %>%
+  mutate(servenumber =as.factor(2))
+secondserve_lmer <- build_linear_model(SecondServe, fit_lmer) %>% 
+  mutate(servenumber =as.factor(2))
+secondserve_coef_lmer <- fetch_coef(secondserve_lmer)
+secondserve_aug_lm <- secondserve_lm %>% unnest(model %>% map(augment))
+secondserve_aug_lmer <- secondserve_lmer %>% unnest(model %>% map(augment))
+secondserve_fit<- secondserve %>% unnest(model%>% map(glance))
+
+colnames(secondserve_coef_lmer)
+# augment first and second serve data together 
+model_lm<- rbind(firstserve_aug_lm, secondserve_aug_lm) 
+model_lmer<- rbind(firstserve_aug_lmer, secondserve_aug_lmer) 
+
+```
+
+```{r analysis}
+predict <- cbind(model_lm$.fitted,model_lmer$.fitted)
+diff <- as.data.frame(predict[,2]-predict[,1])
+ggplot(diff, aes(x=`predict[, 2] - predict[, 1]`)) + geom_histogram()
+# from the summary statistics, I find that linear model and mixed effect doesn't differentiate very much in a sense that the difference between the predicted value is within positive and negative 4. Also we can see from the histogram that the mix effect model tends to give smaller prediction than linear model. 
+
+# let's visualise the model 
+p1 <- ggplot(subset(model_lm, servenumber ==1), 
+             aes(x = PointNumber, y=Speed_KMH, col = MatchNo)) +
   geom_point(alpha = 0.5, size = 0.5) +
-  geom_smooth(method = "lm") + 
-  facet_wrap(~name) 
+  geom_smooth(aes(y = .fitted), method ="lm", se = FALSE)+ 
+  facet_grid(name~MatchNo, scales = "free_x") +
+  theme(legend.position = "none") + 
+  ggtitle("FirstServe-lm")
 
-# produce fitness statistics
-player_fit <- by_player %>% unnest(model %>% map(glance))
-# visualise r.squared 
-ggplot(player_fit,aes(x= r.squared)) + 
-  geom_histogram()
-# from here we can see that a linear model doesnt fit well for the serving speed 
+p2 <- ggplot(subset(model_lm, servenumber ==2), 
+             aes( x = PointNumber, y=Speed_KMH, col = MatchNo)) +
+  geom_point(alpha = 0.5, size = 0.5) +
+  geom_smooth(aes(y = .fitted), method = "lm", se = FALSE) + 
+  facet_grid(name~MatchNo, scales = "free_x") +
+  theme(legend.position = "none") + 
+  ggtitle("SecondServe-lm")
 
-badfit <- player_fit %>% filter(r.squared < 0.1)
-player_dt_2 <- player_dt %>% filter(index_set %in% badfit$index_set)
-ggplot(player_dt_2, aes(y= Speed_KMH, x = index_point)) + 
-  geom_point() +
-  facet_wrap(~name) + 
-  geom_smooth(method = "lm")
- 
+grid.arrange(p1, p2, nrow = 1)
+# From the comparison of the first and second serve of the four players, we can gain some insights in terms of their serving speed.
+# For all players, their first serve is significantly faster than second speed, which demonstrate the necessity of seperating first and second serve when building the model. 
+# For Zeverev and Raonic, most of their serving speed is above 180 KMH, which is much higher than those of Nadal or Federer's. However, their second serve speed has a clearer downward slope, which could be an indicator of their fatigue.
+# For Nadal and Federer, the slope of both serving speed is relatively flat, especially  Federer. THis could due to the effect that since they are both experienced professional player, they get more accustommed to play the whole match without exhibiting very indicative signal of their body fatigue in each match. Potentially, we could observe their fatigue at a higher hierarchy (tournament level), but at match level there's no strong evidence of their fatigue
+
+p3 <- ggplot(model_lm, aes(x = Speed_KMH, y = .fitted))+ 
+  geom_point(alpha = 0.5, sie = 0.5) +
+  facet_wrap(~name, scales = "free_x") +
+  geom_abline(slope = 1, intercept = 0, col = "blue") + 
+  theme(aspect.ratio = 1) + 
+  ggtitle("linear model")
+p4 <- ggplot(model_lmer, aes(x = Speed_KMH, y = .fitted))+ 
+  geom_point(alpha = 0.5, sie = 0.5) +
+  facet_wrap(~name, scales = "free_x") +
+  geom_abline(slope = 1, intercept = 0, col = "blue") + 
+  theme(aspect.ratio = 1) +
+  ggtitle("mix effect model")
+grid.arrange(p3,p4, nrow = 1)
+# This graph contrasts the speed and the predicted speed for four players. The blue line has slope of 1, which is the position where a perfect prediction lays. 
+# The two clusters indicates again the necessity for fitting by two seperate model for first and second serve. 
+# It also shows that linear and mixed effect model are not significantly different from each other. Only for Raonic, whose serving is relatively spread, mix effect seems to have a clearer cut between first and second serve. 
+
+
+
 
 ```
 
