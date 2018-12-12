@@ -1,7 +1,3 @@
-
-data("atp_importance")
-
-
 point_impt <- function(dt){
   temp <- dt
   temp$P1Score <- ifelse(temp$P1Score ==0,0,
@@ -39,4 +35,6 @@ point_impt <- function(dt){
   
 }
 
+library(deuce)
+data(atp_importance)
 
