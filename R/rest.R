@@ -16,12 +16,3 @@ rest <- function(dt){
   
   return(dose)
 }
- 
-
-
-
-
-
-
-
-
