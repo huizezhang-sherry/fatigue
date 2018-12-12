@@ -1,0 +1,99 @@
+---
+title: "MoreCobs"
+author: "Huize Zhang"
+date: "05/12/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(splines)
+library(tidyverse)
+library(ggplot2)
+library(purrr)
+library(broom)
+library(cobs)
+```
+
+```{r}
+# loading data
+Federer <- extract_records_all("data/2017-ausopen-matches.csv", 
+                               "data/2017-ausopen-points.csv", "Roger Federer")
+Nadal = extract_records_all("data/2017-ausopen-matches.csv",
+                            "data/2017-ausopen-points.csv", "Rafael Nadal")
+Alex =extract_records_all("data/2017-ausopen-matches.csv",
+                          "data/2017-ausopen-points.csv", "Alexander Zverev")
+Raonic <- extract_records_all("data/2017-ausopen-matches.csv",
+                          "data/2017-ausopen-points.csv", "Milos Raonic")
+```
+
+
+```{r}
+get_regressor_vector <- function(data) regressor <- data %>% select(index_point, impt, dist)
+
+# function for linear model 
+
+fit <- function(data) {
+  x = lapply(X = data,FUN = function(x) x$regressors)
+  y = lapply(X = data,FUN = function(x) x$Speed_KMH)
+  cobs <- cobs(x,y,constraint = "decrease")
+}
+x = lapply(X = by_player$data,FUN = function(x) x$regressors)
+y = unlist(lapply(X = by_player$data,FUN = function(x) x$Speed_KMH))
+cobs <- cobs::cobs(x,y,constraint = "decrease")
+
+
+# clean the data: filter out DoubleFault and rows serve by the player interested 
+clean_data<- function(dt, name) {
+  dt %>% filter(Speed_KMH != 0) %>% 
+    filter(ServeIndicator == ifelse(player1 == name, 1,2)) %>% 
+    mutate(name = name)
+}
+
+# function for fetch point importance column 
+add_point_importance <- function(data){
+  data %>% mutate(impt = point_impt(data))
+}
+
+# create a list of player's name
+name <- list("Roger Federer","Rafael Nadal", "Alexander Zverev","Milos Raonic")
+
+# create a list of dataset interested 
+player_dt<- list(Federer, Nadal, Alex, Raonic)
+
+
+
+# clean the palyer_dt
+player_dt <- map(player_dt,add_point_importance)
+player_dt <- map2_df(player_dt, name, clean_data)
+
+
+by_player <- player_dt %>% 
+  select(name, impt, index_set, PointNumber, Speed_KMH, dist) %>% 
+  group_by(name, index_set, Speed_KMH) %>%
+  nest(-Speed_KMH,.key = 'regressors') %>% 
+  nest(Speed_KMH, regressors)
+
+# player_regressor <- map(by_player$data,get_regressor_vector)
+
+by_player <- by_player %>% 
+  mutate(model = map(data, fit))
+
+player_coef <- by_player %>% unnest(model %>% map(tidy)) %>% 
+  select(name,index_set, term, estimate) %>% spread(term,estimate)
+
+player_model <- by_player %>% unnest(model %>% map(augment))
+player_fit <- by_player %>% unnest(model %>% map(glance))
+
+ggplot(player_fit, aes(x =r.squared)) + geom_histogram() + facet_wrap(~name)
+```
+
+```{r}
+f <- Federer
+f <- f %>% mutate(impt = point_impt(Federer))
+
+```
+
