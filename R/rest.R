@@ -13,6 +13,7 @@ rest <- function(dt){
   
   # incorporate short and long break into a vector
   dose = long + short
-  
+  dose <- c(0,dose)
+  dose <- head(dose, -1)
   return(dose)
 }
