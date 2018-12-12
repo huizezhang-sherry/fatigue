@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(lme4)
 library(tidyverse)
-Federer$SetNo <- as.factor(Federer$SetNo)
+Federer$SetNo <- as.factor(Federer$SetNo) 
 
 # exclude Round 6 with Warinka because most of the running data is missing 
 # f <- Federer %>% filter(round != 6) %>% mutate(distance = as.numeric(ifelse(player1 == "Roger Federer", P1DistanceRun, P2DistanceRun)))
@@ -34,4 +34,76 @@ anova(Mr, Mrs)
 anova(Ms, Mrs)
 
 ```
+
+```{r}
+# loading data
+Federer <- extract_records_all("data/2017-ausopen-matches.csv", 
+                               "data/2017-ausopen-points.csv", "Roger Federer")
+Nadal = extract_records_all("data/2017-ausopen-matches.csv",
+                            "data/2017-ausopen-points.csv", "Rafael Nadal")
+Alex =extract_records_all("data/2017-ausopen-matches.csv",
+                          "data/2017-ausopen-points.csv", "Alexander Zverev")
+Raonic <- extract_records_all("data/2017-ausopen-matches.csv",
+                          "data/2017-ausopen-points.csv", "Milos Raonic")
+```
+
+```{r}
+# function for fetch point importance column 
+add_point_importance <- function(data){
+  data %>% mutate(impt = point_impt(data))
+}
+
+# clean the data: filter out DoubleFault and rows serve by the player interested 
+clean_data<- function(dt, name) {
+  dt %>% filter(Speed_KMH != 0) %>% 
+    filter(ServeIndicator == ifelse(player1 == name, 1,2)) %>% 
+    mutate(name = name)
+}
+
+fit <- function(data) lm(Speed_KMH~PointNumber + impt + dist,data = data)
+
+
+# fit_nest <- function(data){
+#   model = lmer(Speed_KMH~impt + dist + PointNumber + (1 |SetNo/GameNo), data = data)
+# }
+
+fit_game <- function(data){
+  model = lmer(Speed_KMH~impt + dist + PointNumber + (1 |GameNo), data = data)
+}
+
+# create a list of player's name
+name <- list("Roger Federer","Rafael Nadal", "Alexander Zverev","Milos Raonic")
+
+# create a list of dataset interested 
+player_dt<- list(Federer, Nadal, Alex, Raonic)
+
+# clean the palyer_dt
+player_dt <- map(player_dt,add_point_importance)
+player_dt <- map2_df(player_dt, name, clean_data)
+
+by_player <- player_dt %>% 
+  select(name, index_set, GameNo, PointNumber, Speed_KMH, impt, dist) %>% 
+  mutate(GameNo = as.factor(GameNo)) %>% 
+  group_by(name,index_set) %>% 
+  nest()
+
+by_player <- by_player %>% 
+  mutate(model_fit = map(data,fit)) %>% 
+  # mutate(model_nest = map(data, fit_nest)) %>% 
+  mutate(model_game = map(data, fit_game)) 
+
+player_coef <- by_player %>% unnest(model %>% map(tidy))
+ 
+
+compare_model <- function(model1, model2){
+  p <- anova(model1, model2)
+} 
+
+pvalue= map2_df(by_player$model_game,
+                by_player$model_fit,compare_model)$`Pr(>Chisq)` %>% 
+  na.omit()
+summary(pvalue)
+```
+
+
 
