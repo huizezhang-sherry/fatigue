@@ -1,5 +1,5 @@
 
-load("data/atp_importance.RData")
+data("atp_importance")
 
 
 point_impt <- function(dt){
@@ -39,4 +39,4 @@ point_impt <- function(dt){
   
 }
 
-impt <- point_impt(Federer)
+
