@@ -1,6 +1,6 @@
-dose <- function(dt){
+rest <- function(dt){
   # extract the odd number of game 
-  i <- as.numeric(ifelse(((dt$game + dt$game_) %%2 !=0)&(dt$game_ !=0)==TRUE,1,0))
+  i <- as.numeric(ifelse(((as.numeric(dt$GameNo) + dt$game_) %%2 !=0)&(dt$game_ !=0)==TRUE,1,0))
   
   # extract the game that is odd and ends the set
   end <- as.integer(ifelse(i + dt$set_ ==2, 1,0))
@@ -16,10 +16,7 @@ dose <- function(dt){
   
   return(dose)
 }
-
-f_dose <- dose(Federer %>% filter(match_num != 1601) %>% filter(Speed_KMH !=0))
-f_dose
-n_dose <- dose(Nadal)
+ 
 
 
 
