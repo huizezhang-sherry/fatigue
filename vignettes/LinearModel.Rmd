@@ -18,9 +18,9 @@ library(gridExtra)
 library(lme4)
 library(tidyverse)
 library(broom)
-
 ```
 
+# Extracting data 
 
 ```{r}
 # loading data
@@ -34,13 +34,7 @@ Raonic <- extract_records_all("data/2017-ausopen-matches.csv",
                           "data/2017-ausopen-points.csv", "Milos Raonic")
 ```
 
-  
-```{r}
-library(tidyverse)
-library(broom)
-
-```
-
+# Functions to use
 
 ```{r functions_used}
 # clean the data: adding new variables created by functions in R folder 
@@ -59,15 +53,11 @@ clean_data<- function(dt, name) {
 
 # linear model 
 fit_lm <- function(data) lm(Speed_KMH~ 
-                              PointNumber+ impt + dist + rest + time +cum_time +MatchNo,
+                              PointNumber+ impt + dist + rest + time +cum_time +MatchNo + 
+                              PointNumber * MatchNo,
                             data = data)
-# This one looks to work better - investigate next week
-# fit_lm <- function(data) lm(Speed_KMH~ 
-#                               PointNumber+ impt + dist + rest + time +cum_time +
-#                               as.factor(MatchNo),
-#                             data = data)
+
 # mixed effect model 
-library(lme4)
 fit_lmer <- function(data) lmer(Speed_KMH~
                                   PointNumber + impt + dist + rest + time + cum_time +
                                   (1|MatchNo), 
@@ -89,6 +79,8 @@ fetch_coef <- function(dt){
 }
 ```
 
+# Modelling 
+
 ```{r compute_models}
 # create a list of dataset interested 
 player_dt<- list(Federer, Nadal, Alex, Raonic)
@@ -97,28 +89,24 @@ player_dt<- list(Federer, Nadal, Alex, Raonic)
 name <- list("Roger Federer","Rafael Nadal", "Alexander Zverev","Milos Raonic")
 
 # clean the palyer_dt
-player_dt <- map2_df(player_dt, name, clean_data)
+player_dt_clean <- map2_df(player_dt, name, clean_data)
 # split by first and second serve 
-player_dt <- split(player_dt,player_dt$ServeNumber)
-firstServe <- player_dt[[1]] 
-SecondServe <- player_dt[[2]]
+player_dt_serve <- split(player_dt_clean,player_dt_clean$ServeNumber)
+firstServe <- player_dt_serve[[1]] 
+SecondServe <- player_dt_serve[[2]]
 
-
-# compute the coefficient, fit-statistics for linear&mixed effect model for the first serve dt
+# model for first serve for all four players
 firstserve_lm <- build_linear_model(firstServe, fit_lm) %>% 
   mutate(servenumber =as.factor(1)) 
 firstserve_lmer <- build_linear_model(firstServe, fit_lmer) %>% 
   mutate(servenumber =as.factor(1))
-
 firstserve_coef <- firstserve_lm%>% fetch_coef()
-
-
 firstserve_aug_lm <- firstserve_lm %>% unnest(model %>% map(augment))
 firstserve_aug_lmer <- firstserve_lmer %>% unnest(model %>% map(augment))
 firstserve_fit_lm <- firstserve_lm %>% unnest(model%>% map(glance))
 
 
-# compute the coefficient, fit-statistics for linear&mixed effect model for the second serve dt
+# model for first serve for all four players
 secondserve_lm <- build_linear_model(SecondServe, fit_lm) %>%
   mutate(servenumber =as.factor(2))
 secondserve_lmer <- build_linear_model(SecondServe, fit_lmer) %>% 
@@ -126,12 +114,8 @@ secondserve_lmer <- build_linear_model(SecondServe, fit_lmer) %>%
 secondserve_coef_lmer <- fetch_coef(secondserve_lmer)
 secondserve_aug_lm <- secondserve_lm %>% unnest(model %>% map(augment))
 secondserve_aug_lmer <- secondserve_lmer %>% unnest(model %>% map(augment))
-
 secondserve_fit<- secondserve_lm %>% unnest(model%>% map(glance))
 
-
-
-colnames(secondserve_coef_lmer)
 # augment first and second serve data together 
 model_lm<- rbind(firstserve_aug_lm, secondserve_aug_lm) 
 model_lmer<- rbind(firstserve_aug_lmer, secondserve_aug_lmer) 
@@ -139,121 +123,81 @@ model_lmer<- rbind(firstserve_aug_lmer, secondserve_aug_lmer)
 
 ```
 
-```{r analysis}
+# Visualisation 
+
+## Comparision of lm and lmer 
+The linear model and mixed effect doesn't differentiate  much in a sense that the difference between the predicted value is mostly within -5 and 5 KMH. 
+```{r}
 predict <- cbind(model_lm$.fitted,model_lmer$.fitted)
 diff <- as.data.frame(predict[,2]-predict[,1])
 ggplot(diff, aes(x=`predict[, 2] - predict[, 1]`)) + geom_histogram()
-# from the summary statistics, I find that linear model and mixed effect doesn't differentiate very much in a sense that the difference between the predicted value is within positive and negative 4. Also we can see from the histogram that the mix effect model tends to give smaller prediction than linear model. 
 
-# let's visualise the model 
-p1 <- ggplot(subset(model_lm, servenumber ==1), 
-             aes(x = PointNumber, y=Speed_KMH, col = MatchNo)) +
-  geom_point(alpha = 0.5, size = 0.5) +
-  geom_smooth(aes(y = .fitted), method ="lm", se = FALSE)+ 
-  facet_grid(name~MatchNo, scales = "free_x") +
-  theme(legend.position = "none") + 
-  ggtitle("FirstServe-lm")
+```
 
-p2 <- ggplot(subset(model_lm, servenumber ==2), 
-             aes( x = PointNumber, y=Speed_KMH, col = MatchNo)) +
-  geom_point(alpha = 0.5, size = 0.5) +
-  geom_smooth(aes(y = .fitted), method = "lm", se = FALSE) + 
-  facet_grid(name~MatchNo, scales = "free_x") +
-  theme(legend.position = "none") + 
-  ggtitle("SecondServe-lm")
 
-grid.arrange(p1, p2, nrow = 1)
-# From the comparison of the first and second serve of the four players, we can gain some insights in terms of their serving speed.
-# For all players, their first serve is significantly faster than second speed, which demonstrate the necessity of seperating first and second serve when building the model. 
-# For Zeverev and Raonic, most of their serving speed is above 180 KMH, which is much higher than those of Nadal or Federer's. However, their second serve speed has a clearer downward slope, which could be an indicator of their fatigue.
-# For Nadal and Federer, the slope of both serving speed is relatively flat, especially  Federer. THis could due to the effect that since they are both experienced professional player, they get more accustommed to play the whole match without exhibiting very indicative signal of their body fatigue in each match. Potentially, we could observe their fatigue at a higher hierarchy (tournament level), but at match level there's no strong evidence of their fatigue
 
-p3 <- ggplot(model_lm, aes(x = Speed_KMH, y = .fitted))+ 
-  geom_point(alpha = 0.5, sie = 0.5) +
-  facet_wrap(~name, scales = "free_x") +
+## Predicted vs. Actual 
+This graph contrasts the player's servign speed with the predicted value. The blue line has slope of 1, which is the position where a perfect prediction lays. The two clusters indicates the effectiveness of prediction when seperating the first and second serve in modelling. For Federer, Nadal and Zeverev, the difference between first and second serve is clear as shown in mainly two clusters, while Raonic, as a big server doesn't seem to have clear cut between the first and second serve speed. 
+
+```{r}
+p1 <- ggplot(model_lm, aes(x = Speed_KMH, y = .fitted, col = MatchNo))+ 
+  geom_point(alpha = 0.8, sie = 0.5) +
+  facet_grid(name~MatchNo) +
   geom_abline(slope = 1, intercept = 0, col = "blue") + 
-  theme(aspect.ratio = 1) + 
-  ggtitle("linear model")
-p4 <- ggplot(model_lmer, aes(x = Speed_KMH, y = .fitted))+ 
-  geom_point(alpha = 0.5, sie = 0.5) +
-  facet_wrap(~name, scales = "free_x") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
+  ggtitle("Linear Model")
+
+p2 <- ggplot(model_lmer, aes(x = Speed_KMH, y = .fitted, col = MatchNo))+ 
+  geom_point(alpha = 0.8, sie = 0.5) +
+  facet_grid(name~MatchNo) +
   geom_abline(slope = 1, intercept = 0, col = "blue") + 
-  theme(aspect.ratio = 1) +
-  ggtitle("mix effect model")
-grid.arrange(p3,p4, nrow = 1)
-# This graph contrasts the speed and the predicted speed for four players. The blue line has slope of 1, which is the position where a perfect prediction lays. 
-# The two clusters indicates again the necessity for fitting by two seperate model for first and second serve. 
-# It also shows that linear and mixed effect model are not significantly different from each other. Only for Raonic, whose serving is relatively spread, mix effect seems to have a clearer cut between first and second serve. 
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
+  ggtitle("Mix Effect Model")
 
-
-
+grid.arrange(p1,p2, nrow = 1)
 
 
 ```
 
-```{r analysis}
-predict <- cbind(model_lm$.fitted,model_lmer$.fitted)
-diff <- as.data.frame(predict[,2]-predict[,1])
-ggplot(diff, aes(x=`predict[, 2] - predict[, 1]`)) + geom_histogram()
-# from the summary statistics, I find that linear model and mixed effect doesn't differentiate very much in a sense that the difference between the predicted value is within positive and negative 4. Also we can see from the histogram that the mix effect model tends to give smaller prediction than linear model. 
-
-# let's visualise the model 
-p1 <- ggplot(subset(model_lm, servenumber ==1), 
-             aes(x = PointNumber, y=.fitted, col = as.factor(MatchNo))) +
-  geom_point(alpha = 0.8, size = 0.5) +
-  facet_grid(name~MatchNo, scales = "free_x") +
-  ylim(130,210) +
-  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) + 
-  ggtitle("FirstServe-lm")
-
-
-p2 <- ggplot(subset(model_lm, servenumber ==2), 
-             aes( x = PointNumber, y=.fitted, col = as.factor(MatchNo))) +
-  geom_point(alpha = 0.8, size = 0.5) +
-  facet_grid(name~MatchNo, scales = "free_x") +
-  ylim(130,210)+
-  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) + 
-  ggtitle("SecondServe-lm")
-
-grid.arrange(p1, p2, nrow = 1)
-# From the comparison of the first and second serve of the four players, we can gain some insights in terms of their serving speed.
-# For all players, their first serve is significantly faster than second speed, which demonstrate the necessity of seperating first and second serve when building the model. 
-# For Zeverev and Raonic, most of their serving speed is above 180 KMH, which is much higher than those of Nadal or Federer's. However, their second serve speed has a clearer downward slope, which could be an indicator of their fatigue.
-# For Nadal and Federer, the slope of both serving speed is relatively flat, especially  Federer. THis could due to the effect that since they are both experienced professional player, they get more accustommed to play the whole match without exhibiting very indicative signal of their body fatigue in each match. Potentially, we could observe their fatigue at a higher hierarchy (tournament level), but at match level there's no strong evidence of their fatigue
-
-p3 <- ggplot(model_lm, aes(x = Speed_KMH, y = .fitted, col = as.factor(MatchNo)))+ 
-  geom_point(alpha = 0.5, sie = 0.5) +
-  facet_wrap(name~MatchNo, scales = "free_x", nrow = 4) +
-  geom_abline(slope = 1, intercept = 0, col = "blue") + 
-  theme(aspect.ratio = 1) + 
-  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) + 
-  ggtitle("linear model")
-
-p4 <- ggplot(model_lmer, aes(x = Speed_KMH, y = .fitted, col = as.factor(MatchNo)))+ 
-  geom_point(alpha = 0.5, sie = 0.5) +
-  facet_wrap(name~MatchNo, scales = "free_x", nrow = 4) +
-  geom_abline(slope = 1, intercept = 0, col = "blue") + 
-  theme(aspect.ratio = 1) +
-  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) + 
-  ggtitle("mix effect model")
-
-grid.arrange(p3,p4, nrow = 1)
-# This graph contrasts the speed and the predicted speed for four players. The blue line has slope of 1, which is the position where a perfect prediction lays. 
-# The two clusters indicates again the necessity for fitting by two seperate model for first and second serve. 
-# It also shows that linear and mixed effect model are not significantly different from each other. Only for Raonic, whose serving is relatively spread, mix effect seems to have a clearer cut between first and second serve. 
-
-```
+# X-axis
+The correlation between Point Number and cummulated match time is high and the plot shows the relationship is linear. Thus it doesn't matter much to use point number or match time as x variable when plotting the models.
 
 ```{r correlation}
-player_dt_clean %>% ggplot(aes(x = PointNumber, y = cum_time/60), col = MatchNo) +
-  geom_point(size = 1)+
-  facet_grid(name~MatchNo) +
-  coord_equal()
+player_dt_clean %>% ggplot(aes(x = PointNumber, y = cum_time)) +
+  geom_line() +
+  facet_grid(name~MatchNo)
 
 cor(player_dt_clean$PointNumber, player_dt_clean$cum_time)
-# As can be seen that the correlation between Point Number and cummulated match time is high and the plot shows the relationship is linear. Thus it doesn't matter much to use point number or match time as x variable when plotting the models.
 
 ```
+
+## Point Number 
+For all players, their first serves are significantly faster than the second serve speed, which again, demonstrates the necessity of seperating first and second serve when building the model. For the first serve, Zeverev and Raonic have their serving speeds mostly above 175 KMH, which are much higher than those of Nadal or Federer's. Notice that Nadal does have a few fast serve at around 200 KMH. 
+
+For the second serve, Zeverev shows clear evidence of reduce of speed for each match and this could be due to the fact of his young age, thus lack of experience or fatigue. For Raonic, we can find some evidence of reduce of serving speed but the variation of serve varies a lot for each match. For Nadal and Federer, whose serving speed is consistent across game, fatigue can be captured by the variation of the serving speed. 
+
+Based on these, we could capture the fatigue through the reduce of the serving speed (slope) as well as the variation of the serving speed (variance). Attention need to be paid to players like Raonic, whose serving naturally variate much in each match. 
+
+```{r analysis}
+p3 <- ggplot(subset(model_lm, servenumber ==1), 
+             aes(x = PointNumber, y=.fitted, col = MatchNo)) +
+  geom_point(alpha = 0.8) +
+  facet_grid(name~MatchNo, scales = "fixed") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
+  scale_y_continuous(limits = c(120, 220)) +
+  ggtitle("FirstServe-lm")
+
+p4 <- ggplot(subset(model_lm, servenumber ==2), 
+             aes( x = PointNumber, y=.fitted, col = MatchNo)) +
+  geom_point(alpha = 0.8) +
+  facet_grid(name~MatchNo, scales = "fixed") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
+  scale_y_continuous(limits = c(120, 220)) +
+  ggtitle("SecondServe-lm")
+
+grid.arrange(p3, p4, nrow = 1)
+```
+
 
 
 ```{r}
