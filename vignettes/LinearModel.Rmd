@@ -18,6 +18,7 @@ library(gridExtra)
 library(lme4)
 library(tidyverse)
 library(broom)
+library(mice)
 ```
 
 # Extracting data 
@@ -34,10 +35,28 @@ Raonic <- extract_records_all("data/2017-ausopen-matches.csv",
                           "data/2017-ausopen-points.csv", "Milos Raonic")
 ```
 
+# dealing with missing distance
+```{r}
+# Match 1601 (Federer) and 1602 (Nadal) has missing distance of more than 40% (1601: 48%, 1602: not available at all) - drop the match 
+Nadal <- Nadal %>% filter(match_num != 1602) 
+Federer <- Federer %>% filter(match_num != 1601)
+```
+
+
 # Functions to use
 
 ```{r functions_used}
 # clean the data: adding new variables created by functions in R folder 
+fill_in_miss <- function(dt) {
+  dt %>%
+    mutate(dist = ifelse(dist ==0, NA, dist)) %>% 
+    select(dist,match_num,SetNo, GameNo, PointNumber)
+  dt_mice <- mice(dt)
+  dt_mice <- complete(dt_mice)
+  dt <- dt %>% mutate(dist = dt_mice$dist)
+  return(dt)
+}
+
 clean_data<- function(dt, name) {
   dt %>% 
     mutate(name = name) %>% 
@@ -53,13 +72,14 @@ clean_data<- function(dt, name) {
 
 # linear model 
 fit_lm <- function(data) lm(Speed_KMH~ 
-                              PointNumber+ impt + cum_dist + rest +cum_time + MatchNo +
+                              PointNumber+ impt + cum_dist + rest + MatchNo +
                               PointNumber * MatchNo,
                             data = data)
+# point number and elasped time are highly correlated - drop one 
 
 # mixed effect model 
 fit_lmer <- function(data) lmer(Speed_KMH~
-                                  PointNumber + impt + cum_dist + rest + cum_time +
+                                  PointNumber + impt + cum_dist + rest +
                                   (1|MatchNo), 
                                 data = data)
 
@@ -88,8 +108,12 @@ player_dt<- list(Federer, Nadal, Alex, Raonic)
 # create a list of player's name
 name <- list("Roger Federer","Rafael Nadal", "Alexander Zverev","Milos Raonic")
 
+# multiple imputation for missing distance 
+player_dt_miss <- map(player_dt,fill_in_miss)
+
 # clean the palyer_dt
-player_dt_clean <- map2_df(player_dt, name, clean_data)
+player_dt_clean <- map2_df(player_dt_miss, name, clean_data)
+
 # split by first and second serve 
 player_dt_serve <- split(player_dt_clean,player_dt_clean$ServeNumber)
 firstServe <- player_dt_serve[[1]] 
@@ -177,58 +201,45 @@ For the second serve, Zeverev shows clear evidence of reduce of speed for each m
 Based on these, we could capture the fatigue through the reduce of the serving speed (slope) as well as the variation of the serving speed (variance). Attention need to be paid to players like Raonic, whose serving naturally variate much in each match. 
 
 ```{r analysis}
-p3 <- ggplot(subset(model_lm, servenumber ==1), 
+p3 <- ggplot(subset(model_lmer, servenumber ==1), 
              aes(x = PointNumber, y=.fitted, col = MatchNo)) +
   geom_point(alpha = 0.8, size = 0.8) +
   facet_grid(name~MatchNo, scales = "fixed") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(120, 220)) +
-  ggtitle("FirstServe-lm")
+  ggtitle("FirstServe-lmer")
 
-p4 <- ggplot(subset(model_lm, servenumber ==2), 
+p4 <- ggplot(subset(model_lmer, servenumber ==2), 
              aes( x = PointNumber, y=.fitted, col = MatchNo)) +
   geom_point(alpha = 0.8, size = 0.8) +
   facet_grid(name~MatchNo, scales = "fixed") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(120, 220)) +
-  ggtitle("SecondServe-lm")
+  ggtitle("SecondServe-lmer")
 
 grid.arrange(p3, p4, nrow = 1)
 ```
 
 # Running Distance 
 ```{r}
-miss_summary(firstServe)
-
-firstServe %>% filter(dist == 0) %>% group_by(name, MatchNo) %>% count()
-  ggplot() +
-  geom_point(aes(x= PointNumber, y = cum_dist)) +
-  facet_grid(name~MatchNo)
-
-library(visdat)
-library(naniar)
-vis_miss(firstServe$)
-
-### more work need to be done here for missing value!
-
-p5 <- ggplot(subset(model_lm, servenumber ==1), 
+p5 <- ggplot(subset(model_lmer, servenumber ==1), 
              aes(x = cum_dist, y=.fitted, col = MatchNo)) +
   geom_point(alpha = 0.8) +
-  facet_grid(name~MatchNo) +
+  facet_grid(name~MatchNo, scales = "free_x") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(120, 220)) +
-  ggtitle("FirstServe-lm")
+  ggtitle("FirstServe-lmer")
 
-p6 <- ggplot(subset(model_lm, servenumber ==2), 
+
+p6 <- ggplot(subset(model_lmer, servenumber ==2), 
              aes( x = cum_dist, y=.fitted, col = MatchNo)) +
   geom_point(alpha = 0.8) +
-  facet_grid(name~MatchNo) +
+  facet_grid(name~MatchNo, scales = "free_x") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(120, 220)) +
-  ggtitle("SecondServe-lm")
+  ggtitle("SecondServe-lmer")
 
 grid.arrange(p5, p6, nrow = 1)
-
 ```
 
 
@@ -239,27 +250,21 @@ grid.arrange(p5, p6, nrow = 1)
 - no need to seperate the point importance by players for fatigue index 
 
 ```{r}
-ggplot(firstServe) +
-  geom_histogram(aes(x = log(impt)))
-
-
-summary(firstServe$impt)
-
-p7 <- ggplot(subset(model_lm, servenumber ==1), 
+p7 <- ggplot(subset(model_lmer, servenumber ==1), 
              aes(x = impt, y=.fitted, col = MatchNo)) +
   geom_point(alpha = 0.8) +
   facet_grid(name~MatchNo, scale = "free_x") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(120, 220)) +
-  ggtitle("FirstServe-lm")
+  ggtitle("FirstServe-lmer")
 
-p8 <- ggplot(subset(model_lm, servenumber ==2), 
+p8 <- ggplot(subset(model_lmer, servenumber ==2), 
              aes( x = impt, y=.fitted, col = MatchNo)) +
   geom_point(alpha = 0.8) +
   facet_grid(name~MatchNo, scale = "free_x") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(120, 220)) +
-  ggtitle("SecondServe-lm")
+  ggtitle("SecondServe-lmer")
 
 grid.arrange(p7, p8, nrow = 1)
 ```
@@ -269,46 +274,32 @@ grid.arrange(p7, p8, nrow = 1)
 In general, after having the game break, players tends to have higher serving speed, which indicates less fatigue. The improvement for Federer and Nadal is marginal while for Zeverev, the increase is much more obvious. Raonic's behaviour is interesting in a sense that after each game break, his serving usually drop (green dots) while after the set break, he would have faster serving (blue dotss)
 
 ```{r}
-p9 <- ggplot(subset(model_lm, servenumber ==1), 
+p9 <- ggplot(subset(model_lmer, servenumber ==1), 
              aes(x = PointNumber, y=.fitted, shape = rest,col = as.factor(rest))) +
   geom_point(alpha = 0.8) +
   facet_grid(name~MatchNo, scale = "free_x") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(120, 220)) +
-  ggtitle("FirstServe-lm")
+  ggtitle("FirstServe-lmer")
 
-p10 <- ggplot(subset(model_lm, servenumber ==2), 
+p10 <- ggplot(subset(model_lmer, servenumber ==2), 
              aes( x = PointNumber, y=.fitted, shape = rest,col = as.factor(rest))) +
   geom_point(alpha = 0.8) +
   facet_grid(name~MatchNo, scale = "free_x") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(120, 220)) +
-  ggtitle("SecondServe-lm")
+  ggtitle("SecondServe-lmer")
 
 grid.arrange(p9, p10, nrow = 1)
 ```
 
 # MatchNo
+
 ```{r}
-p11 <- ggplot(subset(model_lm, servenumber ==1), 
-             aes(x = cum_time, y=.fitted, col = MatchNo)) +
-  geom_point(alpha = 0.8) +
-  facet_grid(name~MatchNo, scale = "free_x") +
-  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
-  scale_y_continuous(limits = c(120, 220)) +
-  ggtitle("FirstServe-lm")
-
-p12 <- ggplot(subset(model_lm, servenumber ==2), 
-             aes(x = cum_time, y=.fitted, col = MatchNo)) +
-  geom_point(alpha = 0.8) +
-  facet_grid(name~MatchNo, scale = "free_x") +
-  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
-  scale_y_continuous(limits = c(120, 220)) +
-  ggtitle("SecondServe-lm")
-
-grid.arrange(p11, p12, nrow = 1)
-
-
+ggplot(subset(model_lmer, servenumber==1), 
+       aes(x = PointNumber, y = .fitted, group = name, col = MatchNo)) +
+  geom_line() + 
+  facet_grid(name~MatchNo)
 
 
 
