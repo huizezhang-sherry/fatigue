@@ -31,7 +31,7 @@ point_impt <- function(dt){
     mutate(id = paste(serve_point, return_point, serve_game, return_game, serve_set, return_set, sep = ""))
   
   
-  importance <- ifelse(dt$gender == "Male", 
+  importance <- ifelse(dt$Gender == "Male", 
     atp_importance$importance[match(temp3$id, atp_importance$id)],
     wta_importance$importance[match(temp3$id, atp_importance$id)])
   
