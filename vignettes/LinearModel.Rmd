@@ -304,7 +304,7 @@ p8 <- ggplot(subset(model_lmer, name %in% female),
   facet_grid(name~MatchNo, scale = "free_x") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(100, 220)) +
-  scale_x_continuous(limits = c(0, 0.35)) + 
+  scale_x_continuous(limits = c(0, 0.35)) +  
   ggtitle("Female-lmer")
 
 grid.arrange(p7, p8, nrow = 1)
