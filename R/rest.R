@@ -1,9 +1,9 @@
 rest <- function(dt){
   # extract the odd number of game 
-  i <- as.numeric(ifelse(((as.numeric(dt$GameNo) + dt$game_) %%2 !=0)&(dt$game_ !=0)==TRUE,1,0))
+  i <- as.numeric(ifelse(((as.numeric(dt$GameNo) + dt$game_) %%2 ==0)&(dt$game_ !=0)==TRUE,1,0))
   
   # extract the game that is odd and ends the set
-  end <- as.integer(ifelse(i + dt$set_ ==2, 1,0))
+  end <- as.integer(ifelse(dt$game_ + dt$set_ ==2, 1,0))
   
   # for the odd game that end the set, players get 120 second of break
   long = as.numeric(ifelse(end ==1, 2,0))
