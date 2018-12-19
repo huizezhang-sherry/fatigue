@@ -25,7 +25,7 @@ point_impt <- function(dt){
     mutate(return_game = as.numeric(ifelse(ServeIndicator == 1, P2GamesWon, P1GamesWon))) %>% 
     mutate(serve_set = as.numeric(ifelse(ServeIndicator == 1, p1_set,p2_set))) %>% 
     mutate(return_set = as.numeric(ifelse(ServeIndicator == 1, p2_set,p1_set))) %>% 
-    select(serve_point, return_point, serve_game, return_game, serve_set, return_set)
+    dplyr::select(serve_point, return_point, serve_game, return_game, serve_set, return_set)
   
   temp3 <- temp3 %>% 
     mutate(id = paste(serve_point, return_point, serve_game, return_game, serve_set, return_set, sep = ""))
