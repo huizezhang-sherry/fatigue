@@ -1,0 +1,78 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage[latin1]{inputenc}
+
+\title{Energy Index - measuring fatigue in professional tennis players}
+\author{Sherry Zhang}
+\date{14/12/18}
+
+\begin{document}
+\maketitle
+
+Serving speed could be a good measurement of energy level of a player in a professional match. If a player exhibits perfect energy level, without any evidence of fatigue, we would expect his or her serving speed to have a non-negative slope with little variation (positve slope is possible becuase there are breaks in between games). A mixed effect model is first built seperately for the first and second servers to understand the serving speed for two different types of serves as follows:
+
+\begin{multline}
+\symbf{y} = \symbf{X}\beta + \symbf{Z}\gamma + \epsilon \\
+\gamma \sim \mathcal{N}(0, \sigma^2D), \epsilon \sim \mathcal{N}(0, \sigma^2)
+\end{multline}
+
+\begin{equation}
+\symbf{X} = 
+  \begin{bmatrix}
+   1 \\ \symbf{X}_{Point} \\\symbf{X}_{Time} \\ \symbf{X}_{Impt} \\\symbf{X}_{Dist} \\\symbf{X}_{Rest} \\\symbf{X}_{RCnt}
+  \end{bmatrix}_{7 \times n}
+\end{equation}
+
+\begin{equation}
+  \symbf{Z} = Match_{Num}
+\end{equation}
+
+The model has a fixed effect component in the glossary below and a random effect component as the match number. 
+
+Energy index is a measurement of the energy level of players in the match comparing to the beginning of the match. It can be used for coaching purpose to understand professional tennis players' ability to retain their serving speed as the game proceeds, which is a good indicator for observing fatigue of players. From the mixed effect model, we get two vectors of fitted serving speed with one  for the first serve and another for the second serve.  
+
+
+\begin{equation*}
+\left( \begin{array}{ccccc}
+    y_{11}  \\ y_{12} \\ y_{13}  \\ \vdot \\ y_{1n} 
+\end{array} \right)
+\left( \begin{array}{ccccc}
+   y_{21} \\  y_{22} \\ y_{23} \\ \vdot \\ y_{2m}
+\end{array} \right)
+\end{equation*}
+ 
+After each point is played, we first identify if the serve is a first or second serve, then the corresponding mixed effect model will be fitted to get a vector of updated predicted serving speed.  
+
+
+---------------
+---------------
+
+An exponential function is then filled with all the predicted speed to get an exponential curve. 
+
+***expoenntial function ***
+
+The first point of the curve is the benchmark speed ($SSpeed_0$) and the last point is the current speed ($SSpeed_c$). Energy Index is, thus defined as the proportion of current speed over the benchmark speed, as follows: 
+\begin{equation}
+  EIndx = \frac{SSpeed_c}{SSpeed_0}
+\end{equation}
+
+
+
+Glossary:
+\begin{itemize}
+  \item Intercept: $\beta_0$ is the average serving speed for all the players
+  \item Point: $\beta_2$ allows the serving speed to vary with the number of point played. This is an average change of serving speed with respect to Point number, see the interaction term with player for more player specific change. We would expect players to have serving speed decreased as the point played due to fatigue. 
+  \item Time: Time allows the serving speed to change with respect to the time played of each point. We would expect as the points are played longer, players experience more fatigue and thus have reduced serving speed. 
+  \item Impt: $\beta_3$ allows the serving speed to vary with the importance of the point. Importane of a point is defined as the probability that the point will change the outcome of a match. We would expect the coefficients to e different for two models because from observation, we find that as the point becomes more important, if it is a first serve, players would usually take an aggressive approach via increasing the serving speed, while if it is a second serve, players would usually take a conservative approach. 
+  \item Dist: allows the serving speed to vary with the number of point played. We would expect players to have serving speed decreased as the point played due to fatigue
+  \item Rest: Rest is a factor that would increase the serving speed as we expect after the break between games, players are less fatigue than before. It is also a multi-dummy variable: Rest90: 1 if the break is 90 second, Rest120:1 if the break is 120 second 
+  \item RCnt: stand for Rally Count, which allows for the serving speed to change with the number of rally played in each point. We would expect serving speed will reduce as the points are played longer. 
+\end{itemize}
+
+
+
+
+
+\end{document}
