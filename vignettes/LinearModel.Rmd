@@ -8,89 +8,121 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r libraries}
+library(knitr)
 library(readr)
 library(tidyverse)
 library(ggplot2)
 library(purrr)
 library(broom)
 library(gridExtra)
-library(lme4)
 library(tidyverse)
 library(broom)
 library(mice)
+library(GGally)
 ```
+
+
+```{r result = "hide", comment = FALSE, message=FALSE}
+source("../R/ExtractRecordall.R")
+source("../R/importance.R")
+source("../R/rest.R")
+```
+
 
 # Extracting data 
-
-```{r}
+```{r warning=FALSE, result = "hide", comment = FALSE, message=FALSE}
 # loading data
-Federer <- extract_records_all("data/2017-ausopen-matches.csv", 
-                               "data/2017-ausopen-points.csv", "Roger Federer")
-Nadal = extract_records_all("data/2017-ausopen-matches.csv",
-                            "data/2017-ausopen-points.csv", "Rafael Nadal")
-Alex =extract_records_all("data/2017-ausopen-matches.csv",
-                          "data/2017-ausopen-points.csv", "Alexander Zverev")
-Raonic <- extract_records_all("data/2017-ausopen-matches.csv",
-                          "data/2017-ausopen-points.csv", "Milos Raonic")
-Kerber<- extract_records_all("data/2017-ausopen-matches.csv", 
-                               "data/2017-ausopen-points.csv", "Angelique Kerber")
-Williams_v<- extract_records_all("data/2017-ausopen-matches.csv",
-                            "data/2017-ausopen-points.csv", "Venus Williams")
-Wozniacki <- extract_records_all("data/2017-ausopen-matches.csv",
-                          "data/2017-ausopen-points.csv", "Caroline Wozniacki")
-Williams_s<- extract_records_all("data/2017-ausopen-matches.csv",
-                              "data/2017-ausopen-points.csv", "Serena Williams")
+Federer <- extract_records_all("../data/2017-ausopen-matches.csv", 
+                               "../data/2017-ausopen-points.csv", "Roger Federer")
+Nadal = extract_records_all("../data/2017-ausopen-matches.csv",
+                            "../data/2017-ausopen-points.csv", "Rafael Nadal")
+Alex =extract_records_all("../data/2017-ausopen-matches.csv",
+                          "../data/2017-ausopen-points.csv", "Alexander Zverev")
+Raonic <- extract_records_all("../data/2017-ausopen-matches.csv",
+                          "../data/2017-ausopen-points.csv", "Milos Raonic")
+Kerber<- extract_records_all("../data/2017-ausopen-matches.csv", 
+                               "../data/2017-ausopen-points.csv", "Angelique Kerber")
+Williams_v<- extract_records_all("../data/2017-ausopen-matches.csv",
+                            "../data/2017-ausopen-points.csv", "Venus Williams")
+Wozniacki <- extract_records_all("../data/2017-ausopen-matches.csv",
+                          "../data/2017-ausopen-points.csv", "Caroline Wozniacki")
+Williams_s<- extract_records_all("../data/2017-ausopen-matches.csv",
+                              "../data/2017-ausopen-points.csv", "Serena Williams")
 
 ```
 
-# dealing with missing distance
+
+# Group data
 ```{r}
-# Match 1601 (Federer) and 1602 (Nadal) has missing distance of more than 40% (1601: 48%, 1602: not available at all) - drop the match 
+# create a list of dataset interested 
+player_dt<- list(Federer, Nadal, Alex, Raonic, Kerber, Wozniacki, Williams_v, Williams_s)
+# create a list of player's name
+name <- list("Roger Federer","Rafael Nadal", "Alexander Zverev","Milos Raonic", "Angelique Kerber", "Caroline Wozniacki", "Serena Williams", "Venus Williams")
+female = list("Angelique Kerber", "Caroline Wozniacki", "Serena Williams", "Venus Williams")
+male = list("Roger Federer","Rafael Nadal", "Alexander Zverev","Milos Raonic")
+```
+
+
+# Dealing with missing data
+```{r include = FALSE}
+# Match 1601 (Federer) and 1602 (Nadal) has missing distance of more than 40% 
+# (1601: 48%, 1602: not available at all) - drop the match 
 Nadal <- Nadal %>% filter(match_num != 1602) 
 Federer <- Federer %>% filter(match_num != 1601)
-```
 
-
-# Functions to use
-
-```{r functions_used}
 # clean the data: adding new variables created by functions in R folder 
 fill_in_miss <- function(dt) {
   dt %>%
     mutate(dist = ifelse(dist ==0, NA, dist)) %>% 
-    select(dist,match_num,SetNo, GameNo, PointNumber)
+    dplyr::select(dist,match_num,SetNo, GameNo, PointNumber)
   dt_mice <- mice(dt)
   dt_mice <- complete(dt_mice)
   dt <- dt %>% mutate(dist = lag(dt_mice$dist))
 }
 
+# multiple imputation for missing distance 
+player_dt_miss <- map(player_dt,fill_in_miss)
+```
 
+# Clean data
+```{r}
 clean_data<- function(dt, name) {
   dt %>% 
     mutate(name = name) %>% 
     mutate(rest = as.factor(rest(dt))) %>% 
-    mutate(impt = point_impt(dt)) %>% 
+    mutate(impt = point_impt(dt)) %>%
+    mutate(RallyCount = log(RallyCount)) %>% 
     # filter the double fault points
     filter(Speed_KMH != 0) %>%  
     # filter the point serve by the player interested 
     filter(ServeIndicator == ifelse(player1 == name, 1,2)) %>% 
-    select(PointNumber,impt,dist,cum_dist,rest,time,MatchNo,SetNo, 
+    dplyr::select(PointNumber,impt,dist,cum_dist, rest,time,MatchNo,SetNo, 
            ServeNumber, name, Speed_KMH, cum_time, RallyCount, Gender)
 }
 
+
+# clean the palyer_dt
+player_dt_clean <- map2_df(player_dt_miss, name, clean_data)
+
+cum_dist_resid <- augment(lm(cum_dist~PointNumber, data = player_dt_clean))$.resid
+cum_time_resid<- augment(lm(cum_time~PointNumber, data = player_dt_clean))$.resid
+
+player_dt_clean <- player_dt_clean %>% mutate(cum_dist_resid = cum_dist_resid) %>% 
+  mutate(cum_time_resid = cum_time_resid)
+```
+
+# Model
+```{r}
 # linear model 
 fit_lm <- function(data) lm(Speed_KMH~ 
                               PointNumber+ impt + time + dist + rest + MatchNo + RallyCount +
-                              PointNumber * MatchNo,
+                              PointNumber * MatchNo + cum_dist_resid + cum_time_resid,
                             data = data)
-# point number and elasped time are highly correlated - drop one 
 
-# mixed effect model 
-fit_lmer <- function(data) lmer(Speed_KMH~
-                                  PointNumber + impt + time + dist + rest + RallyCount+
-                                  (1|MatchNo),
-                                data = data)
 
 build_linear_model <- function(dt, fit){
   by_player_fit <- dt %>% 
@@ -103,26 +135,9 @@ build_linear_model <- function(dt, fit){
 fetch_coef <- function(dt){
   player_coef_fit <- dt %>%
     unnest(model %>% map(tidy)) %>%
-    select(name, term,estimate) %>%
+    dplyr::select(name, term,estimate) %>%
     spread(term, estimate)
 }
-```
-
-# Modelling 
-
-```{r compute_models}
-# create a list of dataset interested 
-player_dt<- list(Federer, Nadal, Alex, Raonic, Kerber, Wozniacki, Williams_v, Williams_s)
-# create a list of player's name
-name <- list("Roger Federer","Rafael Nadal", "Alexander Zverev","Milos Raonic", "Angelique Kerber", "Caroline Wozniacki", "Serena Williams", "Venus Williams")
-female = list("Angelique Kerber", "Caroline Wozniacki", "Serena Williams", "Venus Williams")
-male = list("Roger Federer","Rafael Nadal", "Alexander Zverev","Milos Raonic")
-
-# multiple imputation for missing distance 
-player_dt_miss <- map(player_dt,fill_in_miss)
-
-# clean the palyer_dt
-player_dt_clean <- map2_df(player_dt_miss, name, clean_data)
 
 # split by first and second serve 
 player_dt_serve <- split(player_dt_clean,player_dt_clean$ServeNumber)
@@ -132,47 +147,30 @@ SecondServe <- player_dt_serve[[2]]
 # model for first serve for all four players
 firstserve_lm <- build_linear_model(firstServe, fit_lm) %>% 
   mutate(servenumber =as.factor(1)) 
-firstserve_lmer <- build_linear_model(firstServe, fit_lmer) %>% 
-  mutate(servenumber =as.factor(1))
-firstserve_coef <- firstserve_lm%>% fetch_coef()
+firstserve_coef <- firstserve_lm %>% fetch_coef()
 firstserve_aug_lm <- firstserve_lm %>% unnest(model %>% map(augment))
-firstserve_aug_lmer <- firstserve_lmer %>% unnest(model %>% map(augment))
 firstserve_fit_lm <- firstserve_lm %>% unnest(model%>% map(glance))
 
 
 # model for first serve for all four players
 secondserve_lm <- build_linear_model(SecondServe, fit_lm) %>%
   mutate(servenumber =as.factor(2))
-secondserve_lmer <- build_linear_model(SecondServe, fit_lmer) %>% 
-  mutate(servenumber =as.factor(2))
-secondserve_coef_lmer <- fetch_coef(secondserve_lmer)
+secondserve_coef <- fetch_coef(secondserve_lm)
 secondserve_aug_lm <- secondserve_lm %>% unnest(model %>% map(augment))
-secondserve_aug_lmer <- secondserve_lmer %>% unnest(model %>% map(augment))
-secondserve_fit<- secondserve_lm %>% unnest(model%>% map(glance))
+secondserve_fit_lm<- secondserve_lm %>% unnest(model%>% map(glance))
 
 # augment first and second serve data together 
 model_lm<- rbind(firstserve_aug_lm, secondserve_aug_lm) 
-model_lmer<- rbind(firstserve_aug_lmer, secondserve_aug_lmer) 
-
+coefficient <- rbind(firstserve_coef,secondserve_coef)%>% 
+  mutate(servenumber = c(1,1,1,1,1,1,1,1,
+                         2,2,2,2,2,2,2,2))
 ```
 
-# Visualisation 
-
-## Comparision of lm and lmer 
-The linear model and mixed effect doesn't differentiate  much in a sense that the difference between the predicted value is mostly within -5 and 5 KMH. 
-```{r}
-predict <- cbind(model_lm$.fitted,model_lmer$.fitted)
-diff <- as.data.frame(predict[,2]-predict[,1])
-ggplot(diff, aes(x=`predict[, 2] - predict[, 1]`)) + geom_histogram()
-
-```
-
-
-
+# Model Diagnostic
 ## Predicted vs. Actual 
 This graph contrasts the player's serving speed with the predicted value. The blue line has slope of 1, which is the position where a perfect prediction lays. The two clusters indicates the effectiveness of prediction when seperating the first and second serve in modelling. For Federer, Nadal and Zeverev, the difference between first and second serve is clear as shown in mainly two clusters, while Raonic doesn't seem to have clear cut between the first and second serve speed. 
 
-```{r}
+```{r, warning=FALSE, echo = FALSE}
 p1_m <- ggplot(subset(model_lm, name %in% male),
                     aes(x = Speed_KMH, y = .fitted, col = MatchNo))+ 
   geom_point(alpha = 0.8, sie = 0.5) +
@@ -189,39 +187,92 @@ p1_f <- ggplot(subset(model_lm,name %in% female)
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   ggtitle("Linaer Model - Female")
 
-p2_m <- ggplot(subset(model_lmer,name %in% male)
-             , aes(x = Speed_KMH, y = .fitted, col = MatchNo))+ 
-  geom_point(alpha = 0.8, sie = 0.5) +
-  facet_grid(name~MatchNo) +
-  geom_abline(slope = 1, intercept = 0, col = "blue") + 
-  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
-  ggtitle("Mix Effect Model - Male")
 
-p2_f <- ggplot(subset(model_lmer,name %in% female)
-             , aes(x = Speed_KMH, y = .fitted, col = MatchNo))+ 
-  geom_point(alpha = 0.8, sie = 0.5) +
-  facet_grid(name~MatchNo) +
-  geom_abline(slope = 1, intercept = 0, col = "blue") + 
-  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
-  ggtitle("Mix Effect Model - Female")
+grid.arrange(p1_m,p1_f, nrow= 1)
 
-grid.arrange(p1_m,p2_m, nrow= 1)
-grid.arrange(p1_f,p2_f, nrow= 1)
 ```
+
+
+## Plot explanatory variables against each other
+```{r echo = FALSE}
+
+var <- player_dt_clean %>% mutate(rest = as.numeric(rest)) %>% 
+  mutate(MatchNo = as.numeric(MatchNo)) %>% 
+  dplyr::select(-Gender, -Speed_KMH, -name, -cum_dist, 
+                -cum_time, -MatchNo, - rest, -SetNo, -ServeNumber)
+scatmat(var)
+```
+
+
+## Model Summary: R.squared 
+```{r echo = FALSE}
+fit <- rbind(firstserve_fit_lm, secondserve_fit_lm)
+fit <- fit %>% dplyr::select(name,r.squared, servenumber) %>% spread(servenumber,r.squared)
+kable(fit)
+```
+
+## Check significance of variables 
+### Firstserve 
+```{r echo =FALSE}
+p.value_1<- firstserve_lm %>%
+    unnest(model %>% map(tidy)) %>%
+    dplyr::select(name, term, p.value) %>% 
+  mutate(p.value = round(p.value,2)) %>% 
+  spread(name,p.value)
+kable(p.value_1)
+```
+
+### Secondserve
+```{r echo = FALSE}
+p.value_2 <- secondserve_lm %>% 
+  unnest(model %>% map(tidy)) %>%
+    dplyr::select(name, term, p.value) %>% 
+  mutate(p.value = round(p.value,2)) %>% 
+  spread(name,p.value)
+kable(p.value_2)
+```
+
+
 
 ## correlation
 The correlation between Point Number and cummulated match time is high and the plot shows the relationship is linear. Thus it doesn't matter much to use point number or match time as x variable when plotting the models.
 
-```{r correlation}
-player_dt_clean %>% ggplot(aes(x = PointNumber, y = cum_dist)) +
+```{r correlation,warning=FALSE, echo = FALSE}
+player_dt_clean %>% ggplot(aes(x = PointNumber, y = cum_time)) +
   geom_point() +
   facet_grid(name~MatchNo)
 
-cor(player_dt_clean$PointNumber, player_dt_clean$cum_dist)
+cor(player_dt_clean$PointNumber, player_dt_clean$cum_time)
 
 ```
 
+
+# Visualisation
 ## Point Number 
+```{r analysis, warning=FALSE, echo = FALSE}
+
+p3 <- ggplot(subset(model_lm,  name %in% male), 
+             aes(x = PointNumber, y=.fitted, col = servenumber)) +
+  geom_point(alpha = 0.8, size = 0.8) +
+  facet_grid(name~MatchNo, scales = "fixed") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
+  scale_y_continuous(limits = c(100,220)) + 
+  ggtitle("Male-lm")
+
+p4 <- ggplot(subset(model_lm, name %in% female), 
+             aes( x = PointNumber, y=.fitted, col = servenumber)) +
+  geom_point(alpha = 0.8, size = 0.8) +
+  facet_grid(name~MatchNo, scales = "fixed") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
+  scale_y_continuous(limits = c(100,220)) + 
+  ggtitle("Female-lm")
+
+grid.arrange(p3, p4, nrow = 1)
+
+# coefficient of PointNumber for each player in two different serves
+kable(coefficient %>% dplyr::select(name, PointNumber, servenumber) %>% spread(servenumber, PointNumber))
+```
+
 For all players, there's significant difference between first and second serve speed. We can also find that on average, Male's serving is significantly faster than female's.
 
 For the first serve, Zeverev and Raonic have their serving speeds mostly above 175 KMH, which are much higher than those of Nadal or Federer's. Notice that Nadal does have a few fast serve at around 200 KMH. 
@@ -232,28 +283,30 @@ Looking at female's data, we could see that Serena and Venus Williams, who playe
 
 Based on these, we could capture the fatigue through the reduce of the serving speed (slope) as well as the variation of the serving speed (variance). Attention need to be paid to players like Raonic, whose serving speed naturally variates a lot in each match and Wozniakic, whose first serve seems to go against our hypothesis that serving speed will decrease as the game proceeds. 
 
-```{r analysis}
-
-p3 <- ggplot(subset(model_lmer,  name %in% male), 
-             aes(x = PointNumber, y=.fitted, col = servenumber)) +
-  geom_point(alpha = 0.8, size = 0.8) +
-  facet_grid(name~MatchNo, scales = "fixed") +
-  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
-  scale_y_continuous(limits = c(100,220)) + 
-  ggtitle("Male-lmer")
-
-p4 <- ggplot(subset(model_lmer, name %in% female), 
-             aes( x = PointNumber, y=.fitted, col = servenumber)) +
-  geom_point(alpha = 0.8, size = 0.8) +
-  facet_grid(name~MatchNo, scales = "fixed") +
-  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
-  scale_y_continuous(limits = c(100,220)) + 
-  ggtitle("Female-lmer")
-
-grid.arrange(p3, p4, nrow = 1)
-```
 
 ## Running Distance 
+```{r, warning=FALSE, echo = FALSE}
+p5 <- ggplot(subset(model_lm, name %in% male), 
+             aes(x = dist, y=.fitted, col = servenumber)) +
+  geom_point(alpha = 0.8) +
+  facet_grid(name~MatchNo, scales = "free_x") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
+  scale_y_continuous(limits = c(100, 220)) +
+  ggtitle("Male-lm")
+
+
+p6 <- ggplot(subset(model_lm,  name %in% female), 
+             aes( x = dist, y=.fitted, col = servenumber)) +
+  geom_point(alpha = 0.8) +
+  facet_grid(name~MatchNo, scales = "free_x") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
+  scale_y_continuous(limits = c(100, 220)) +
+  ggtitle("Female-lm")
+
+grid.arrange(p5, p6, nrow = 1)
+kable(coefficient %>% dplyr::select(name, dist, servenumber) %>% spread(servenumber, dist))
+```
+
 Running distance in general doesn't seem to affect much on the male's serving speed, although little evidence (Nadal's second serve) supports that it may reduce the second serving speed. 
 
 While for female, running distance seems to be an increasing factor of the second serving speed. We can see that Wozniaki's "seemingly increasing serving speed" in the previous graph is due to the increase of second serve speed. Serena also exhibit this pattern in the second serve. 
@@ -261,63 +314,36 @@ While for female, running distance seems to be an increasing factor of the secon
 Another thing to notice is that due to the nature of the female's game (3 games a match rather than 5 games as male's). We observe less data for female than male, thus we would expect female data to have higher variation (i.e. Kerber and Venus)
 
 
-```{r}
-p5 <- ggplot(subset(model_lmer, name %in% male), 
-             aes(x = dist, y=.fitted, col = servenumber)) +
-  geom_point(alpha = 0.8) +
-  facet_grid(name~MatchNo, scales = "free_x") +
-  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
-  scale_y_continuous(limits = c(100, 220)) +
-  ggtitle("Male-lmer")
-
-
-p6 <- ggplot(subset(model_lmer,  name %in% female), 
-             aes( x = dist, y=.fitted, col = servenumber)) +
-  geom_point(alpha = 0.8) +
-  facet_grid(name~MatchNo, scales = "free_x") +
-  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
-  scale_y_continuous(limits = c(100, 220)) +
-  ggtitle("Female-lmer")
-
-grid.arrange(p5, p6, nrow = 1)
-```
-
-
-## point importance 
-- In general, point importance doesn't affect the serving speed very much. 
-- However, as point becomes more importance, player's second serve speed tends to decrease i.e. Raonic and Kerber, which can be viewed as a conservative approach taken by players.  
-- Also, its interesting to notice that Federer's first serve, serving speeds increase as points become more importance, which shows a more aggressive approach taken by him trying to win the point via an ace serve. This pattern also shows in Serena's second serve 
-
-```{r}
-p7 <- ggplot(subset(model_lmer,name %in% male), 
+## Point Importance 
+```{r, warning=FALSE, echo = FALSE}
+p7 <- ggplot(subset(model_lm,name %in% male), 
              aes(x = impt, y=.fitted, col = servenumber)) +
   geom_point(alpha = 0.8) +
   facet_grid(name~MatchNo, scale = "free_x") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(100, 220)) +
   scale_x_continuous(limits = c(0, 0.35)) + 
-  ggtitle("Male-lmer")
+  ggtitle("Male-lm")
 
-p8 <- ggplot(subset(model_lmer, name %in% female), 
+p8 <- ggplot(subset(model_lm, name %in% female), 
              aes( x = impt, y=.fitted, col = servenumber)) +
   geom_point(alpha = 0.8) +
   facet_grid(name~MatchNo, scale = "free_x") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(100, 220)) +
   scale_x_continuous(limits = c(0, 0.35)) +  
-  ggtitle("Female-lmer")
+  ggtitle("Female-lm")
 
 grid.arrange(p7, p8, nrow = 1)
+kable(coefficient %>% dplyr::select(name, impt, servenumber) %>% spread(servenumber, impt))
 ```
 
+- In general, point importance doesn't affect the serving speed very much. 
+- However, as point becomes more importance, player's second serve speed tends to decrease i.e. Raonic and Kerber, which can be viewed as a conservative approach taken by players.  
+- Also, its interesting to notice that Federer's first serve, serving speeds increase as points become more importance, which shows a more aggressive approach taken by him trying to win the point via an ace serve. This pattern also shows in Serena's second serve 
 
-## rest
-In general, after having the game break, players tends to have higher serving speed, which indicates less fatigue. The improvement for Nadal is marginal while it is more obvious in Zverev's first serve and Federer's Second serve. Raonic's behaviour is interesting in a sense that after each game break, his serving usually drop (green dots) while after the set break, he would have faster serving (blue dotss)
-
-In female players, Kerber and Wozniaki behave similarly with a decrease of serving speed after the scheduled break. While for Serena Williams, she has similar behaviour to  top male players with marginal increase of serving speed after the breaks 
-
-
-```{r}
+## Rest
+```{r, warning=FALSE, echo = FALSE}
 p9_1 <- ggplot(subset(model_lm, name %in% male & servenumber ==1), 
              aes(x = PointNumber, y=.fitted, shape = rest,col = as.factor(rest))) +
   geom_point(alpha = 0.8) +
@@ -354,62 +380,118 @@ p10_2 <- ggplot(subset(model_lm, name %in% female & servenumber ==2),
 grid.arrange(p9_1, p9_2, nrow = 1)
 grid.arrange(p10_1, p10_2, nrow = 1)
 
+kable(coefficient %>% dplyr::select(name, rest1.5, servenumber) %>% spread(servenumber, rest1.5))
+kable(coefficient %>% dplyr::select(name, rest2, servenumber) %>% spread(servenumber, rest2))
 ```
 
-## time
-In general, as the point is played longer, player's serving speed will decrease marginally (i.e. Nadal). However, for Raonic, it seems to have a positive effect on the serving speed 
-```{r}
-p11 <- ggplot(subset(model_lmer, name %in% male), 
+In general, after having the game break, players tends to have higher serving speed, which indicates less fatigue. The improvement for Nadal is marginal while it is more obvious in Zverev's first serve and Federer's Second serve. Raonic's behaviour is interesting in a sense that after each game break, his serving usually drop (green dots) while after the set break, he would have faster serving (blue dotss)
+
+In female players, Kerber and Wozniaki behave similarly with a decrease of serving speed after the scheduled break. While for Serena Williams, she has similar behaviour to  top male players with marginal increase of serving speed after the breaks 
+
+
+
+## Time
+
+```{r, warning=FALSE, echo = FALSE}
+p11 <- ggplot(subset(model_lm, name %in% male), 
              aes(x = time, y=.fitted, col = servenumber)) +
   geom_point(alpha = 0.8) +
   facet_grid(name~MatchNo, scales = "free_x") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(100, 220)) +
-  ggtitle("Male-lmer")
+  ggtitle("Male-lm")
 
 
-p12 <- ggplot(subset(model_lmer, name %in% female), 
+p12 <- ggplot(subset(model_lm, name %in% female), 
              aes( x = time, y=.fitted, col = servenumber)) +
   geom_point(alpha = 0.8) +
   facet_grid(name~MatchNo, scales = "free_x") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(100, 220)) +
-  ggtitle("Female-lmer")
+  ggtitle("Female-lm")
 
 grid.arrange(p11, p12, nrow = 1)
+kable(coefficient %>% dplyr::select(name, time, servenumber) %>% spread(servenumber, time))
 ```
 
-## RallyCount
-From the first plot, Raonic and Federer play relatively fewer long rally points, while Zverev and Nadal has more long rally points, which may help to understand if rally count would have an effect on fatigue (Serving speed)
+In general, as the point is played longer, player's serving speed will decrease marginally (i.e. Nadal). However, for Raonic, it seems to have a positive effect on the serving speed 
 
-The number of rally played in each game is also a factor that would decrease the serving speed and the effect is obvious for the first serve of Zeverev, Kerber, Venus Williams . It is interesting to know that although Nadal and Serena Williams have played a relative number of long rally game, it doesnt seem to affect his serving speed much. 
-```{r}
-ggplot(model_lmer, aes(x = RallyCount)) + 
+## Rally Count
+
+```{r, warning=FALSE, echo = FALSE}
+ggplot(model_lm, aes(x = RallyCount)) + 
   geom_histogram(bins = 10)+
   facet_wrap(~name)
 
-p13 <- ggplot(subset(model_lmer, name %in% male), 
+p13 <- ggplot(subset(model_lm, name %in% male), 
              aes(x = RallyCount, y=.fitted, col = servenumber)) +
   geom_point(alpha = 0.8) +
   facet_grid(name~MatchNo, scales = "free_x") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(100, 220)) +
-  ggtitle("Male-lmer")
+  ggtitle("Male-lm")
 
 
-p14 <- ggplot(subset(model_lmer, name %in% female), 
+p14 <- ggplot(subset(model_lm, name %in% female), 
              aes( x = RallyCount, y=.fitted, col = servenumber)) +
   geom_point(alpha = 0.8) +
   facet_grid(name~MatchNo, scales = "free_x") +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
   scale_y_continuous(limits = c(100, 220)) +
-  ggtitle("Female-lmer")
+  ggtitle("Female-lm")
 
 grid.arrange(p13, p14, nrow = 1)
+kable(coefficient %>% dplyr::select(name, RallyCount, servenumber) %>% spread(servenumber, RallyCount))
 ```
 
+From the first plot, Raonic and Federer play relatively fewer long rally points, while Zverev and Nadal has more long rally points, which may help to understand if rally count would have an effect on fatigue (Serving speed)
 
-```{r}
+The number of rally played in each game is also a factor that would decrease the serving speed and the effect is obvious for the first serve of Zeverev, Kerber, Venus Williams . It is interesting to know that although Nadal and Serena Williams have played a relative number of long rally game, it doesnt seem to affect his serving speed much. 
 
+## cum_dist_resid
+```{r, warning=FALSE, echo = FALSE}
+p15 <- ggplot(subset(model_lm, name %in% male), 
+             aes(x = cum_dist_resid, y=.fitted, col = servenumber)) +
+  geom_point(alpha = 0.8) +
+  facet_grid(name~MatchNo, scales = "free_x") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
+  scale_y_continuous(limits = c(100, 220)) +
+  ggtitle("Male-lm")
+
+
+p16 <- ggplot(subset(model_lm, name %in% female), 
+             aes( x = cum_dist_resid, y=.fitted, col = servenumber)) +
+  geom_point(alpha = 0.8) +
+  facet_grid(name~MatchNo, scales = "free_x") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
+  scale_y_continuous(limits = c(100, 220)) +
+  ggtitle("Female-lm")
+
+grid.arrange(p15, p16, nrow = 1)
+kable(coefficient %>% dplyr::select(name, cum_dist_resid, servenumber) %>% spread(servenumber, cum_dist_resid))
 ```
+
+## cum_time_resid
+```{r, warning=FALSE, echo = FALSE}
+p17 <- ggplot(subset(model_lm, name %in% male), 
+             aes(x = cum_time_resid, y=.fitted, col = servenumber)) +
+  geom_point(alpha = 0.8) +
+  facet_grid(name~MatchNo, scales = "free_x") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
+  scale_y_continuous(limits = c(100, 220)) +
+  ggtitle("Male-lm")
+
+
+p18 <- ggplot(subset(model_lm, name %in% female), 
+             aes( x = cum_time_resid, y=.fitted, col = servenumber)) +
+  geom_point(alpha = 0.8) +
+  facet_grid(name~MatchNo, scales = "free_x") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45)) +
+  scale_y_continuous(limits = c(100, 220)) +
+  ggtitle("Female-lm")
+
+grid.arrange(p17, p18, nrow = 1)
+kable(coefficient %>% dplyr::select(name, cum_time_resid, servenumber) %>% spread(servenumber, cum_time_resid))
+```
+
 
