@@ -52,7 +52,7 @@ Wozniacki <- extract_records_all("../data/2017-ausopen-matches.csv",
                           "../data/2017-ausopen-points.csv", "Caroline Wozniacki")
 Williams_s<- extract_records_all("../data/2017-ausopen-matches.csv",
                               "../data/2017-ausopen-points.csv", "Serena Williams")
-
+ 
 ```
 
 
