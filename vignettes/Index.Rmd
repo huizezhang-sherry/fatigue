@@ -1,0 +1,56 @@
+---
+title: "Fatigue Index"
+author: "Huize Zhang"
+date: "16/01/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Model
+
+## Dose: $d_{j}$ 
+For every point played, assume the player is given a constant dose
+$$d_{j} = \beta_{0j} + \beta_{1j}I(brk_1) + \beta_{2j}I(brk_2)$$
+
+
+
+$I(brk_1) = 1$ if the point is played after a 90 second break and 0 otherwise
+
+$I(brk_2) = 1$ if the point is played after a 120 second break and 0 otherwise
+
+## Concentration: $C_{jt}$
+The injected dose $d_0$ will eliminate with a rate $\phi$.
+
+$$ d_{0j}e^{-t \phi_j }$$
+$t$ is the index of point number 
+
+The concentration of fatigue in the body is the remaining of each individual dose
+$$C_{jt} = \sum_{t = 1}^{\infty}d_{jt} e^{-t\phi }$$
+
+
+## ServeSpeed: $S_{jt}$ 
+The concentration and Serving Speed is linked via a Gamma function
+$$S_{jt} = \frac{1}{\Gamma(k_j)\theta_j^{k_j}}x^{k_j-1}e^{-C_{jt}/{\theta_j}}$$
+
+$k_j$ and $\theta_j$ are modelled hierarchically to incorporate player difference
+
+
+
+
+
+
+# Prior
+$$\beta_{ij} \sim N(??????????????), i = 0,1,2$$
+$$\phi \sim Gamma(a, b)$$ 
+$$S_{ij} \sim N(\mu, \sigma^2)$$
+The shape parameter $k_j$ has a prior distribution $k_j \sim Gamma(c,d)$
+https://www.hindawi.com/journals/jps/2011/457472/
+
+prior for $\theta_j$?????????
+
+
+# Define Index 
+Proportion of lose of speed comparing to the start of the game 
