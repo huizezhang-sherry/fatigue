@@ -3,19 +3,19 @@ title: "Fatigue Index"
 author: "Huize Zhang"
 date: "16/01/2019"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 ```
 
 # Model
 
 ## Dose: $d_{j}$ 
 For every point played, assume the player is given a constant dose
-$$d_{j} = \beta_{0j} + \beta_{1j}I(brk_1) + \beta_{2j}I(brk_2)$$
-
-
+$$d_{j} = \beta_{1j}I(brk_1) + \beta_{2j}I(brk_2)$$
 
 $I(brk_1) = 1$ if the point is played after a 90 second break and 0 otherwise
 
@@ -25,20 +25,142 @@ $I(brk_2) = 1$ if the point is played after a 120 second break and 0 otherwise
 The injected dose $d_0$ will eliminate with a rate $\phi$.
 
 $$ d_{0j}e^{-t \phi_j }$$
-$t$ is the index of point number 
 
 The concentration of fatigue in the body is the remaining of each individual dose
 $$C_{jt} = \sum_{t = 1}^{\infty}d_{jt} e^{-t\phi }$$
 
 
 ## ServeSpeed: $S_{jt}$ 
-The concentration and Serving Speed is linked via a Gamma function
-$$S_{jt} = \frac{1}{\Gamma(k_j)\theta_j^{k_j}}x^{k_j-1}e^{-C_{jt}/{\theta_j}}$$
+
+$$S_{jt} = \beta_{0j} + \beta_{1j}C_{jt}*PointImpt$$
+or 
+$$S_{jt} = \beta_{0j} + \beta_{1j}C_{jt} + \beta_{2j}PointImpt$$
 
 $k_j$ and $\theta_j$ are modelled hierarchically to incorporate player difference
 
+$$S_{jt} = \beta_{0j} + \beta_{1j}\sum_{i = 1}^{t}[b_{1j}I(brk_1) + b_{2j}I(brk_2)] e^{-i\phi }*PointImpt$$
+
+$$S_{jt} = \beta_{0j} + \beta_{1j}\sum_{i = 1}^{t}[b_{1j}I(brk_1) + b_{2j}I(brk_2)] e^{-i\phi} + \beta_{2j}PointImpt$$
+
+Parameters: $\beta_{0j}$, $\beta_{1j}$, $\beta_{2j}$, $\phi$, $b_{1j}$, $b_{2j}$
+
+Data: $brk_1$, $brk_2$, $PointImpt$, $t$
+
+```{r result = "hide", comment = FALSE, message=FALSE, echo = FALSE}
+source("R/ExtractRecordall.R")
+source("R/importance.R")
+source("R/rest.R")
+```
+
+```{r}
+Federer <- extract_records_all("data/2017-ausopen-matches.csv", 
+                               "data/2017-ausopen-points.csv", "Roger Federer")
+Federer["brk_1"] = ifelse(rest(Federer) == 1.5, 1,0)
+Federer["brk_2"] = ifelse(rest(Federer) == 2, 1,0)
+Federer["impt"] = point_impt(Federer)
+
+f <- data.frame(brk1 = ifelse(rest(Federer) == 1.5, 1,0), 
+                brk2 = ifelse(rest(Federer) == 2, 1,0), 
+                impt = Federer$impt, 
+                t = Federer$PointNumber, 
+                match_num = Federer$match_num)
+f <- f %>% replace_na(list(impt = 0))
+f <- f %>% mutate(t_n = (t-min(t))/(max(t)-min(t)))
+f <- f %>% filter(match_num == 1112)
+
+ll<- function(par_1, par_2,par_3, par_4, par_5, par_6, data){
+  for (i in 1: nrow(data)){
+    con[i] = (par_5*data$brk1[i]+par_6*data$brk2[i])*exp(-(data$t_n[i] - i)*par_4)
+    #con_sum = sum(con)
+  }
+
+  con =  (par_5*data$brk1+par_6*data$brk2)*exp(-data$t_n*par_4)
+  l_s = par_1+ par_2*con + par_3*data$impt
+  l <- prod(l_s)
+  ll <- log(l)
+  return(ll)
+}
+
+par_1 = seq(0.54, 0.6, 0.05)
+par_2 = seq(1,1.4,0.1)
+par_3 = seq(1,1.4,0.1)
+par_4 = seq(1,1.4,0.1)
+par_5 = seq(1,1.4,0.1)
+par_6 = seq(1,1.4,0.1)
+par = expand.grid(par_1, par_2, par_3, par_4, par_5, par_6)
+par$f <- 0
+
+for (i in 1:nrow(par)){
+  par$f[i] = ll(par$Var1[i],par$Var2[i],par$Var3[i], par$Var4[i], par$Var5[i], par$Var6[i],f)
+}
+
+plot(par$Var1, par$f)
+plot(par$Var2, par$f)
+plot(par$Var3, par$f)
+plot(par$Var4, par$f)
+plot(par$Var5, par$f)
+plot(par$Var6, par$f)
 
 
+
+
+
+
+
+
+mle <- function(x, mu, sigma) {
+  f <- prod(dnorm(x, mu, sigma))
+  return(f)
+}
+mu <- seq(1, 3, 0.1)
+sig <- seq(2, 7, 0.1)
+g <- expand.grid(x=mu, y=sig)
+g$f <- 0
+for (i in 1:nrow(g)) {
+  g$f[i] <- mle(x, g$x[i], g$y[i])
+}
+ggplot(g, aes(x=x, y=y, fill=f)) + geom_tile() + xlab(expression(mu)) + ylab(expression(sigma)) + theme_bw() + 
+  scale_fill_continuous("L") +
+  theme(aspect.ratio=1)
+```
+
+```{r}
+mle_op<- function(par, data){
+  con =  (par[5]*data$brk1+par[6]*data$brk2)*exp(-data$t_n*par[4])
+  l_s = par[1]+ par[2]*con + par[3]*data$impt
+  l <- prod(l_s)
+  ll <- log(l)
+  return(ll)
+}
+
+fit <- optim(c(1,1,1,1,1,1), mle_op, data = f)
+fit$par
+con_max = (fit$par[5]*f$brk1+fit$par[6]*f$brk2)*exp(-f$t_n*fit$par[4])
+l_max= prod(fit$par[1]+fit$par[2]*con_max+fit$par[3]*f$impt)
+ll_max= log(l_max)
+
+ggplot(f_opt, aes(x =t , y = fitted_ll)) + geom_point()
+fit$par
+
+
+
+
+
+square_err <- function(par, data) {
+  sq <- sum((data$y-(par[1]+par[2]*data$x+par[3]*data$x^2+par[4]*data$x^3))^2)
+  return(sq)
+}
+fit <- optim(c(1,1,1,1), square_err, data=df)
+df <- df %>% mutate(fitted = fit$par[1] + fit$par[2]*x +
+                      fit$par[3]*x^2 + fit$par[4]*x^3)
+ggplot(df, aes(x=x, y=y)) + geom_point() +
+  geom_line(aes(y=fitted), colour="blue")  
+
+
+
+
+
+```
 
 
 
@@ -47,10 +169,53 @@ $$\beta_{ij} \sim N(??????????????), i = 0,1,2$$
 $$\phi \sim Gamma(a, b)$$ 
 $$S_{ij} \sim N(\mu, \sigma^2)$$
 The shape parameter $k_j$ has a prior distribution $k_j \sim Gamma(c,d)$
-https://www.hindawi.com/journals/jps/2011/457472/
+https://www.hindawi.com/journals/jps/2011/437472/
 
 prior for $\theta_j$?????????
 
 
 # Define Index 
 Proportion of lose of speed comparing to the start of the game 
+
+
+
+
+
+# Extracting data 
+```{r warning=FALSE, result = "hide", comment = FALSE, message=FALSE}
+# loading data
+Federer <- extract_records_all("../data/2017-ausopen-matches.csv", 
+                               "../data/2017-ausopen-points.csv", "Roger Federer")
+Nadal = extract_records_all("../data/2017-ausopen-matches.csv",
+                            "../data/2017-ausopen-points.csv", "Rafael Nadal")
+Alex =extract_records_all("../data/2017-ausopen-matches.csv",
+                          "../data/2017-ausopen-points.csv", "Alexander Zverev")
+Raonic <- extract_records_all("../data/2017-ausopen-matches.csv",
+                          "../data/2017-ausopen-points.csv", "Milos Raonic")
+Kerber<- extract_records_all("../data/2017-ausopen-matches.csv", 
+                               "../data/2017-ausopen-points.csv", "Angelique Kerber")
+Williams_v<- extract_records_all("../data/2017-ausopen-matches.csv",
+                            "../data/2017-ausopen-points.csv", "Venus Williams")
+Wozniacki <- extract_records_all("../data/2017-ausopen-matches.csv",
+                          "../data/2017-ausopen-points.csv", "Caroline Wozniacki")
+Williams_s<- extract_records_all("../data/2017-ausopen-matches.csv",
+                              "../data/2017-ausopen-points.csv", "Serena Williams")
+ 
+```
+
+
+```{r}
+Federer["brk_1"] = ifelse(rest(Federer) == 1.5, 1,0)
+Federer["brk_2"] = ifelse(rest(Federer) == 2, 1,0)
+Federer["impt"] = point_impt(Federer)
+
+
+
+#fn_s_mul = function(a,b,c,d,t,r){a+b* sum_{t=1}^\infty c*x_1+d*x_2 e^{-tr}}
+
+
+#library(drc)
+#it = drm(log(Speed_KMH) ~ brk_1, data = Federer, fct = W1.4())
+
+```
+
