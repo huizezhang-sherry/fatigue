@@ -38,6 +38,7 @@ point_impt <- function(dt){
 }
 
 library(deuce)
+library(purrr)
 data(atp_importance)
 data("wta_importance")
 
