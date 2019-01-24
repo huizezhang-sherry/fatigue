@@ -31,7 +31,13 @@ extract_records_all <- function(dt1, dt2, name){
     mutate(index_game = (paste(match_num,SetNo,GameNo, sep = ""))) %>%
     mutate(MatchNo = as.factor(substr(dt$match_num,2,2))) %>%
     mutate(time = c(0,as.vector(diff(dt$ElapsedTime)))) %>%
-    mutate(cum_time = cumsum(time)/60)
+    mutate(cum_time = cumsum(time)/60) %>% 
+    select(-status, -winner, -event_name, -court_name, -court_id, -player1id, 
+           -player2id, -nation1, -nation2, -Rally, -P1Momentum, -P2Momentum,
+           -P1FirstSrvIn, -P2FirstSrvIn, -P1FirstSrvWon, -P2FirstSrvWon, 
+           -P1SecondSrvIn, -P2SecondSrvIn, -P1SecondSrvWon, -P2SecondSrvWon, 
+           -P1ForcedError, -P2ForcedError, -Winner_FH, -Winner_BH, -ServingTo,
+           -P1TurningPoint, -P2TurningPoint)
 
   dt <- dt %>% filter(PointNumber != 0)
   return(dt)
