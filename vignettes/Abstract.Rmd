@@ -1,0 +1,13 @@
+---
+title: "Abstract"
+author: "Huize Zhang"
+date: "25/01/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This research project investigates the effect of fatigue in the professional tennis player in the Australia Open 2017. As a pysiological effect, fatigue is hard to observe and to quantify while it provides value to the player's training and help the audience to better appreciate the game. In the research, plots are created to visualise fatigue for different players including both male and female. Dose-response model is used to model fatigue as the cumulative effect of each point played. When a point is played, a dose is "injected" into the body of the player with an eliminating rate and as the match goes, these cumulated doses are displayed as fatigue. 
+
