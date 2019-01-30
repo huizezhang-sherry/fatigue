@@ -39,7 +39,6 @@ extract_records_all <- function(dt1, dt2, name){
            -P1ForcedError, -P2ForcedError, -Winner_FH, -Winner_BH, -ServingTo,
            -P1TurningPoint, -P2TurningPoint)
 
-  dt <- dt %>% filter(PointNumber != 0)
   return(dt)
 }
 

@@ -13,46 +13,66 @@ knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 
 # Model
 
-## Dose: $d_{j}$ 
+## Dose: $d$ 
 For every point played, assume the player is given a constant dose
-$$d_{j} = \beta_{1j}I(brk_1) + \beta_{2j}I(brk_2)$$
+$$d =\beta_{0}+ \beta_{1}I(brk_1) + \beta_{2}I(brk_2)$$
 
 $I(brk_1) = 1$ if the point is played after a 90 second break and 0 otherwise
 
 $I(brk_2) = 1$ if the point is played after a 120 second break and 0 otherwise
 
-## Concentration: $C_{jt}$
-The injected dose $d_0$ will eliminate with a rate $\phi$.
+## Concentration: $Con_{t}$
 
-$$ d_{0j}e^{-t \phi_j }$$
 
-The concentration of fatigue in the body is the remaining of each individual dose
-$$C_{jt} = \sum_{t = 1}^{\infty}d_{jt} e^{-t\phi }$$
+The injected dose $d_0$ will eliminate with a rate $\phi$. Now we use i j both as index to write the decay matrix
+$$
+con_{ij} = \begin{pmatrix}
+d_0e^{-(t_1 - t_1)\phi}\\
+d_0e^{-(t_2 - t_1)\phi} &  d_1e^{-(t_2 - t_2)\phi}\\
+d_0e^{-(t_3 - t_1)\phi} &  d_1e^{-(t_3 - t_2)\phi} & d_2e^{-(t_3 - t_3)\phi} \\
+\vdots \\
+d_0e^{-(t_i - t_1)\phi} &  d_1e^{-(t_i - t_2)\phi} & d_2e^{-(t_i - t_3)\phi} & \dots d_je^{-(t_i - t_j)\phi}\\
+\end{pmatrix}
+$$
+
+The concentration of fatigue in the body is the remaining of each individual dose, which is the sum of each row 
+
+$$Con_{t} = \left[\begin{array}{c}
+\sum_{j = 1}^n d_{j}e^{-(1-j)\phi} \\
+\sum_{j = 1}^n d_{j}e^{-(2-j)\phi} \\
+\vdots \\
+\sum_{j = 1}^n d_{j}e^{-(i-j)\phi} \\
+\end{array}
+\right]$$
 
 
 ## ServeSpeed: $S_{jt}$ 
 
-$$S_{jt} = \beta_{0j} + \beta_{1j}C_{jt}*PointImpt$$
+$$S_{t} = \beta_{0} + \beta_{1}Con_{t}*PointImpt$$
 or 
-$$S_{jt} = \beta_{0j} + \beta_{1j}C_{jt} + \beta_{2j}PointImpt$$
+$$S_{t} = \beta_{0} + \beta_{1}Con_{t} + \beta_{2}PointImpt$$
 
-$k_j$ and $\theta_j$ are modelled hierarchically to incorporate player difference
 
-$$S_{jt} = \beta_{0j} + \beta_{1j}\sum_{i = 1}^{t}[b_{1j}I(brk_1) + b_{2j}I(brk_2)] e^{-i\phi }*PointImpt$$
-
-$$S_{jt} = \beta_{0j} + \beta_{1j}\sum_{i = 1}^{t}[b_{1j}I(brk_1) + b_{2j}I(brk_2)] e^{-i\phi} + \beta_{2j}PointImpt$$
-
-Parameters: $\beta_{0j}$, $\beta_{1j}$, $\beta_{2j}$, $\phi$, $b_{1j}$, $b_{2j}$
-
-Data: $brk_1$, $brk_2$, $PointImpt$, $t$
 
 ```{r result = "hide", comment = FALSE, message=FALSE, echo = FALSE}
 source("R/ExtractRecordall.R")
 source("R/importance.R")
 source("R/rest.R")
+
+library(ggplot2)
+library(tidyverse)
 ```
 
+
 ```{r}
+ausopen %>% filter(GameNo == 1, match_num == 1112, SetNo ==1) %>% select(ElapsedTime, P1GamesWon, P2GamesWon, P1Score, P2Score, Speed_KMH, ServeIndicator, GameNo, SetNo) 
+
+ausopen %>% filter(GameNo == 2, match_num == 1112, SetNo ==1) %>% select(ElapsedTime, P1GamesWon, P2GamesWon, P1Score, P2Score, Speed_KMH, ServeIndicator, GameNo, SetNo) 
+```
+
+
+```{r}
+# load and clean data
 Federer <- extract_records_all("data/2017-ausopen-matches.csv", 
                                "data/2017-ausopen-points.csv", "Roger Federer")
 Federer["brk_1"] = ifelse(rest(Federer) == 1.5, 1,0)
@@ -63,51 +83,334 @@ f <- data.frame(brk1 = ifelse(rest(Federer) == 1.5, 1,0),
                 brk2 = ifelse(rest(Federer) == 2, 1,0), 
                 impt = Federer$impt, 
                 t = Federer$PointNumber, 
-                match_num = Federer$match_num)
+                match_num = Federer$match_num,
+                speed = Federer$Speed_KMH,
+                dist = Federer$dist,
+                rally = lag(Federer$RallyCount), 
+                GameNo = Federer$GameNo,
+                ServeNo = Federer$ServeNumber)
 f <- f %>% replace_na(list(impt = 0))
-f <- f %>% mutate(t_n = (t-min(t))/(max(t)-min(t)))
-f <- f %>% filter(match_num == 1112)
+f <- f %>% filter(match_num == 1112) %>% filter(speed != 0 )%>% 
+  mutate(impt_low = ifelse(impt<median(impt), 1,0)) %>% 
+  mutate(impt_high = ifelse(impt>=median(impt), 1,0))
+f <- f %>% mutate(t_n = (t-min(t))/(max(t)-min(t))) # treat point index to be between 0 and 1 to avoid computation problem in the exponential of concentration function 
 
-ll<- function(par_1, par_2,par_3, par_4, par_5, par_6, data){
+
+
+```
+
+
+# additive model 
+```{r optimisation}
+# initialise concentration matrix 
+con = matrix(0, nrow = nrow(f), ncol = nrow(f))
+con_sum = matrix(0, nrow = nrow(f), ncol = 1)
+
+
+# The model to optimise - additive model 
+ll<- function(par, data){
   for (i in 1: nrow(data)){
-    con[i] = (par_5*data$brk1[i]+par_6*data$brk2[i])*exp(-(data$t_n[i] - i)*par_4)
-    #con_sum = sum(con)
+    for (j in 1: nrow(data)){
+      con[i,j] =  (par[5]+
+                     par[6]*f$brk1[j]+
+                     par[7]*f$brk2[j])*exp(-(f$t_n[i]-f$t_n[j])*par[4])
+      }
+    con_sum = rowSums(con)
+    }
+  ss_fitted <- par[1]+ par[2]*con_sum + par[3]*f$impt
+  u = f$speed - ss_fitted
+  f <- -sum(log(dnorm(u, par[8], par[9])))
+  return(f)
+}
+
+ll(c(5,-0.002,5,5,5,5,0.5,1,1), data = f)
+fit_a <- optim(c(0.05,-0.002,0.5,0.05,0.05,0.05,0.5,3,7), ll, data = f)
+
+
+# results
+(par_max_a <- fit_a$par)
+for (i in 1: nrow(f)){
+    for (j in 1: nrow(f)){
+      con[i,j] =  (fit_a$par[5]+fit_a$par[6]*f$brk1[j]+fit_a$par[7]*f$brk2[j])*exp(-(f$t_n[i]-f$t_n[j])*fit_a$par[4])
+      }
+  con_max = rowSums(con)
   }
 
-  con =  (par_5*data$brk1+par_6*data$brk2)*exp(-data$t_n*par_4)
-  l_s = par_1+ par_2*con + par_3*data$impt
-  l <- prod(l_s)
-  ll <- log(l)
+f_fitted_a <- f %>% mutate(fitted = fit_a$par[1]+fit_a$par[2]*con_max+fit_a$par[3]*f$impt) 
+
+ggplot(f_fitted_a, aes(x= fitted, y = speed)) + 
+  geom_point() + 
+  scale_x_continuous(limits = c(min(f_fitted_a$speed), max(f_fitted_a$speed))) + 
+  scale_y_continuous(limits = c(min(f_fitted_a$speed), max(f_fitted_a$speed))) + 
+  theme(aspect.ratio=1) 
+ggplot(f_fitted_a, aes(x = t_n)) + geom_point(aes(y = fitted, col = "red")) + geom_point(aes( y = speed))
+ggplot(f_fitted_a, aes( x= t_n)) + 
+  geom_line(aes(y = fitted)) + 
+  geom_vline(data = filter(f_fitted_a, brk1==1), aes(xintercept = t_n, alpha = 0.5), col = "red", linetype = "dashed") +
+  geom_vline(data = filter(f_fitted_a, brk2 ==1), aes(xintercept = t_n, alpha = 0.5), col = "blue")
+```
+
+
+
+# additive model 2 - add more variables 
+```{r optimisation}
+# initialise concentration matrix 
+con = matrix(0, nrow = nrow(f), ncol = nrow(f))
+con_sum = matrix(0, nrow = nrow(f), ncol = 1)
+
+
+# The model to optimise - additive model 
+ll_2<- function(par, data){
+  for (i in 1: nrow(data)){
+    for (j in 1: nrow(data)){
+      con[i,j] =  (par[5]+
+                     par[6]*f$brk1[j]+
+                     par[7]*f$brk2[j])*exp(-(f$t_n[i]-f$t_n[j])*par[4])
+      }
+    con_sum = rowSums(con)
+    }
+  
+  ss_fitted <- par[1]+ 
+    par[2]*con_sum +
+    par[3]*f$impt_low +
+    par[12]*f$impt_high +
+    par[10]*f$dist + 
+    par[11]*f$rally
+  
+  u = f$speed - ss_fitted
+  f <- -sum(log(dnorm(u, par[8], par[9])))
+  return(f)
+}
+
+ll_2(c(1,0.5, 100, -0.02, 1, -4, -7, 1, 10, 1, 1, 1.6), data = f)
+fit_a_2 <- optim(c(3.44, 0.78, 1.83, -0.02, 1.4, -4, -7, 1.1, 17, 4,5, 1.6), ll_2, data = f)
+
+
+# results
+(par_max_a_2 <- fit_a_2$par)
+for (i in 1: nrow(f)){
+    for (j in 1: nrow(f)){
+      con[i,j] =  (fit_a_2$par[5]+
+                     fit_a_2$par[6]*f$brk1[j]+
+                     fit_a_2$par[7]*f$brk2[j])*exp(-(f$t_n[i]-f$t_n[j])*fit_a_2$par[4])
+      }
+  con_max = rowSums(con)
+  }
+
+f_fitted_a_2 <- f %>% mutate(fitted = fit_a_2$par[1]+
+                               fit_a_2$par[2]*con_max+
+                               fit_a_2$par[3]*f$impt_low +
+                               fit_a_2$par[12]*f$impt_high +
+                               fit_a_2$par[10]*f$dist + 
+                               fit_a_2$par[11]*f$rally) 
+
+# plot
+ggplot(f_fitted_a_2, aes(fitted, speed)) + 
+  geom_point() + 
+  scale_x_continuous(limits = c(min(f_fitted_a_2$speed), max(f_fitted_a_2$speed))) + 
+  scale_y_continuous(limits = c(min(f_fitted_a_2$speed), max(f_fitted_a_2$speed))) + 
+  theme(aspect.ratio=1) 
+ggplot(f_fitted_a_2, aes(x = t_n)) + 
+  geom_point(aes(y = fitted, col = "red")) + geom_point(aes( y = speed))
+ggplot(f_fitted_a_2, aes( x= t_n)) + 
+  geom_line(aes(y = fitted)) + 
+  geom_vline(data = filter(f_fitted_a, brk1==1), aes(xintercept = t_n, alpha = 0.5), col = "red", linetype = "dashed") +
+  geom_vline(data = filter(f_fitted_a, brk2 ==1), aes(xintercept = t_n, alpha = 0.5), col = "blue")
+```
+
+
+# additive model 3 - add more variables 
+```{r optimisation}
+# initialise concentration matrix 
+con = matrix(0, nrow = nrow(f), ncol = nrow(f))
+con_sum = matrix(0, nrow = nrow(f), ncol = 1)
+
+
+# The model to optimise - additive model 
+ll_3<- function(par, data){
+  for (i in 1: nrow(data)){
+    for (j in 1: nrow(data)){
+      con[i,j] =  (par[5]+
+                     par[6]*f$brk1[j]+
+                     par[7]*f$brk2[j] + 
+                     par[3]*f$impt_low[j] +
+                     par[12]*f$impt_high[j] +
+                     par[10]*f$dist[j] + 
+                     par[11]*f$rally[j])*exp(-(f$t_n[i]-f$t_n[j])*par[4])
+      }
+    con_sum = rowSums(con)
+    }
+  
+  ss_fitted <- par[1]+ 
+    par[2]*con_sum
+    
+  
+  u = f$speed - ss_fitted
+  f <- -sum(log(dnorm(u, par[8], par[9])))
+  return(f)
+}
+
+ll_3(c(1,0.5, 100, -0.02, 1, -4, -7, 1, 10, 1, 1, 1.6), data = f)
+fit_a_3 <- optim(par_max_a_2, ll_3, data = f)
+
+
+# results
+(par_max_a_3 <- fit_a_3$par)
+for (i in 1: nrow(f)){
+    for (j in 1: nrow(f)){
+      con[i,j] =  (fit_a_3$par[5]+
+                     fit_a_3$par[6]*f$brk1[j]+
+                     fit_a_3$par[7]*f$brk2[j] +
+                     fit_a_3$par[3]*f$impt_low[j] +
+                     fit_a_3$par[12]*f$impt_high[j] +
+                     fit_a_3$par[10]*f$dist[j] + 
+                     fit_a_3$par[11]*f$rally[j])*exp(-(f$t_n[i]-f$t_n[j])*fit_a_3$par[4])
+      }
+  con_max = rowSums(con)
+  }
+
+f_fitted_a_3 <- f %>% mutate(fitted = fit_a_3$par[1]+
+                               fit_a_3$par[2]*con_max) 
+
+ggplot(f_fitted_a_3, aes(fitted, speed)) + 
+  geom_point() + 
+  scale_x_continuous(limits = c(min(f_fitted_a_3$speed), max(f_fitted_a_3$speed))) + 
+  scale_y_continuous(limits = c(min(f_fitted_a_3$speed), max(f_fitted_a_3$speed))) + 
+  theme(aspect.ratio=1) 
+ggplot(f_fitted_a_3, aes(x = t_n)) + 
+  geom_line(aes(y = fitted, col = "red")) + geom_point(aes( y = speed))
+ggplot(f_fitted_a_3, aes(x= t_n)) + 
+  geom_point(aes(y = fitted)) + 
+  #geom_vline(data = filter(f_fitted_a, brk1==1), aes(xintercept = t_n, alpha = 0.5), col = "red", linetype = "dashed") +
+  geom_vline(data = filter(f_fitted_a, brk2 ==1), aes(xintercept = t_n, alpha = 0.5), col = "blue")
+```
+
+```{r}
+# example to follow 
+square_err <- function(par, data) {
+  sq <- sum((data$y-(par[1]+par[2]*data$x+par[3]*data$x^2+par[4]*data$x^3))^2)
+  return(sq)
+}
+fit <- optim(c(1,1,1,1), square_err, data=df)
+df <- df %>% mutate(fitted = fit$par[1] + fit$par[2]*x +
+                      fit$par[3]*x^2 + fit$par[4]*x^3)
+ggplot(df, aes(x=x, y=y)) + geom_point() +
+  geom_line(aes(y=fitted), colour="blue")  
+```
+
+
+
+# multiplicative model 
+```{r}
+# initialise concentration matrix 
+con = matrix(0, nrow = nrow(f), ncol = nrow(f))
+con_sum = matrix(0, nrow = nrow(f), ncol = 1)
+
+
+# The model to optimise - multiplicative  model 
+ll_m<- function(par, data){
+  for (i in 1: nrow(data)){
+    for (j in 1: nrow(data)){
+      con[i,j] =  (par[5]+par[6]*f$brk1[j]+par[7]*f$brk2[j])*exp(-(f$t_n[i]-f$t_n[j])*par[4])
+      }
+    con_sum = rowSums(con)
+    }
+  ss_fitted <- par[1]+ par[2]*con_sum * par[3]*f$impt
+  u = f$speed - ss_fitted
+  f <- -sum(log(dnorm(u, par[8], par[9])))
+  return(f)
+}
+
+ll(par_max_a, data = f)
+fit_m <- optim(par_max_a, ll_m, data = f)
+
+
+# results
+(par_max <- fit_m$par)
+for (i in 1: nrow(f)){
+    for (j in 1: nrow(f)){
+      con[i,j] =  (fit_m$par[5]+fit_m$par[6]*f$brk1[j]+fit_m$par[7]*f$brk2[j])*exp(-(f$t_n[i]-f$t_n[j])*fit_m$par[4])
+      }
+  con_max = rowSums(con)
+  }
+
+f_fitted_m <- f %>% mutate(fitted = fit_m$par[1]+fit_m$par[2]*con_max+fit_m$par[3]*f$impt) 
+
+
+ggplot(f_fitted_m, aes(x = fitted, y = speed)) + 
+  geom_point() + 
+  scale_x_continuous(limits = c(min(data$speed), max(data$speed))) + 
+  scale_y_continuous(limits = c(min(data$speed), max(data$speed))) + 
+  theme(aspect.ratio=1) 
+ggplot(f_fitted_m, aes(x = t_n)) + geom_point(aes(y = fitted)) + geom_point(aes( y = speed))
+ggplot(f_fitted_m, aes( x= t_n)) + geom_line(aes(y = fitted))
+  
+```
+
+
+
+
+
+
+
+
+
+
+
+
+Parameters: $\beta_{0j}$, $\beta_{1j}$, $\beta_{2j}$, $\phi$,$b_{0j}$, $b_{1j}$, $b_{2j}$
+
+Data: $brk_1$, $brk_2$, $PointImpt$, $t$
+
+```{r grid serach}
+# initialise matrix 
+con = matrix(nrow = nrow(data), ncol = nrow(data))
+con_sum = matrix(nrow = nrow(data), ncol =1)
+
+# function for grid search  
+ll<- function(par_1, par_2,par_3, par_4, par_5, par_6, par_7, data){
+  for (i in 1: nrow(data)){
+    for (j in 1: nrow(data)){
+      con[i,j] =  (par_5+par_6*data$brk1[j]+par_7*data$brk2[j])*exp(-(data$t_n[i]-data$t_n[j])*par_4)
+      }
+    con_sum = rowSums(con)
+    }
+  l_s = par_1+ par_2*con_sum + par_3*data$impt
+  ll <- sum(log(l_s))
   return(ll)
 }
 
-par_1 = seq(0.54, 0.6, 0.05)
-par_2 = seq(1,1.4,0.1)
-par_3 = seq(1,1.4,0.1)
-par_4 = seq(1,1.4,0.1)
-par_5 = seq(1,1.4,0.1)
-par_6 = seq(1,1.4,0.1)
-par = expand.grid(par_1, par_2, par_3, par_4, par_5, par_6)
+
+# grid parameters 
+par_1 = 0.4990
+par_2 = -0.2280
+par_3 = 0.5524
+par_4 = 0.5466 # decrease monotonically from 0.3 to 0.55 - result Inf after 0.55
+par_5 = seq(0.45, 0.50, 0.01) # result Inf after 0.51
+par_6 = seq(0.45, 0.6, 0.05)
+par_7 = 0.6068
+par = expand.grid(par_1, par_2, par_3, par_4, par_5, par_6, par_7)
 par$f <- 0
 
+# run the grid search 
 for (i in 1:nrow(par)){
-  par$f[i] = ll(par$Var1[i],par$Var2[i],par$Var3[i], par$Var4[i], par$Var5[i], par$Var6[i],f)
+  par$f[i] = ll(par$Var1[i],par$Var2[i],par$Var3[i], par$Var4[i], par$Var5[i], par$Var6[i],par$Var7[i],f)
 }
 
-plot(par$Var1, par$f)
-plot(par$Var2, par$f)
-plot(par$Var3, par$f)
-plot(par$Var4, par$f)
-plot(par$Var5, par$f)
-plot(par$Var6, par$f)
+# result 
+summary(par$f)
+par[which(par$f == max(par$f)),]
+par2 <- par %>% filter(is.finite(f))
+
+plot(x = par2$Var5, y = par2$f)
+plot(x = par2$Var6, y =  par2$f)
+
+ggplot(par2, aes(x=Var5, y=Var6, fill=f)) + geom_tile() + theme_bw() + 
+  theme(aspect.ratio=1)
+ggplot(par2) + geom_point(aes(x = Var5, y = f))
 
 
-
-
-
-
-
-
+# example to follow 
 mle <- function(x, mu, sigma) {
   f <- prod(dnorm(x, mu, sigma))
   return(f)
@@ -124,43 +427,6 @@ ggplot(g, aes(x=x, y=y, fill=f)) + geom_tile() + xlab(expression(mu)) + ylab(exp
   theme(aspect.ratio=1)
 ```
 
-```{r}
-mle_op<- function(par, data){
-  con =  (par[5]*data$brk1+par[6]*data$brk2)*exp(-data$t_n*par[4])
-  l_s = par[1]+ par[2]*con + par[3]*data$impt
-  l <- prod(l_s)
-  ll <- log(l)
-  return(ll)
-}
-
-fit <- optim(c(1,1,1,1,1,1), mle_op, data = f)
-fit$par
-con_max = (fit$par[5]*f$brk1+fit$par[6]*f$brk2)*exp(-f$t_n*fit$par[4])
-l_max= prod(fit$par[1]+fit$par[2]*con_max+fit$par[3]*f$impt)
-ll_max= log(l_max)
-
-ggplot(f_opt, aes(x =t , y = fitted_ll)) + geom_point()
-fit$par
-
-
-
-
-
-square_err <- function(par, data) {
-  sq <- sum((data$y-(par[1]+par[2]*data$x+par[3]*data$x^2+par[4]*data$x^3))^2)
-  return(sq)
-}
-fit <- optim(c(1,1,1,1), square_err, data=df)
-df <- df %>% mutate(fitted = fit$par[1] + fit$par[2]*x +
-                      fit$par[3]*x^2 + fit$par[4]*x^3)
-ggplot(df, aes(x=x, y=y)) + geom_point() +
-  geom_line(aes(y=fitted), colour="blue")  
-
-
-
-
-
-```
 
 
 
@@ -180,42 +446,4 @@ Proportion of lose of speed comparing to the start of the game
 
 
 
-
-# Extracting data 
-```{r warning=FALSE, result = "hide", comment = FALSE, message=FALSE}
-# loading data
-Federer <- extract_records_all("../data/2017-ausopen-matches.csv", 
-                               "../data/2017-ausopen-points.csv", "Roger Federer")
-Nadal = extract_records_all("../data/2017-ausopen-matches.csv",
-                            "../data/2017-ausopen-points.csv", "Rafael Nadal")
-Alex =extract_records_all("../data/2017-ausopen-matches.csv",
-                          "../data/2017-ausopen-points.csv", "Alexander Zverev")
-Raonic <- extract_records_all("../data/2017-ausopen-matches.csv",
-                          "../data/2017-ausopen-points.csv", "Milos Raonic")
-Kerber<- extract_records_all("../data/2017-ausopen-matches.csv", 
-                               "../data/2017-ausopen-points.csv", "Angelique Kerber")
-Williams_v<- extract_records_all("../data/2017-ausopen-matches.csv",
-                            "../data/2017-ausopen-points.csv", "Venus Williams")
-Wozniacki <- extract_records_all("../data/2017-ausopen-matches.csv",
-                          "../data/2017-ausopen-points.csv", "Caroline Wozniacki")
-Williams_s<- extract_records_all("../data/2017-ausopen-matches.csv",
-                              "../data/2017-ausopen-points.csv", "Serena Williams")
- 
-```
-
-
-```{r}
-Federer["brk_1"] = ifelse(rest(Federer) == 1.5, 1,0)
-Federer["brk_2"] = ifelse(rest(Federer) == 2, 1,0)
-Federer["impt"] = point_impt(Federer)
-
-
-
-#fn_s_mul = function(a,b,c,d,t,r){a+b* sum_{t=1}^\infty c*x_1+d*x_2 e^{-tr}}
-
-
-#library(drc)
-#it = drm(log(Speed_KMH) ~ brk_1, data = Federer, fct = W1.4())
-
-```
 

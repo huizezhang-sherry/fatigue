@@ -1,5 +1,7 @@
 point_impt <- function(dt){
   temp <- dt
+  
+  # encode score from 1-15-30-40 to 0-1-2-3
   temp$P1Score <- ifelse(temp$P1Score ==0,0,
                          ifelse(temp$P1Score == 15,1,
                                 ifelse(temp$P1Score==30,2,
@@ -9,6 +11,7 @@ point_impt <- function(dt){
                                 ifelse(temp$P2Score==30,2,
                                        ifelse(temp$P2Score == 40,3,3))))
   
+  
   add_set_index <- function(dt){
     dt <- dt %>%
       mutate(p1_set = cumsum(as.numeric(ifelse(SetWinner ==1, 1, 0)))) %>% 
@@ -17,6 +20,12 @@ point_impt <- function(dt){
   
   data <- split(temp, as.numeric(temp$match_num))
   temp2 <- map_df(data, add_set_index)
+  
+  # serve_point/return_point: the current point score of the server/returner in 0-3 scale
+  # serve_game/return_game: the current match score of the server/returner 
+    #i.e. if the current match score is 4-6 for server, serve_game = 4, return_game = 6
+  # serve_set/return_set: the current set score of the server/returner 
+    # i.e. if the currnet set score is 0-2 for server, serve_set = 0, return_set = 2
   
   temp3 <- temp2 %>% 
     mutate(serve_point = as.numeric(ifelse(ServeIndicator == 1, P1Score, P2Score))) %>% 
@@ -42,3 +51,5 @@ library(purrr)
 data(atp_importance)
 data("wta_importance")
 
+
+# To cite this article: Peter G. O'donoghue (2001) The Most Important Points in Grand Slam Singles Tennis, Research Quarterly for Exercise and Sport, 72:2, 125-131, DOI:10.1080/02701367.2001.10608942
