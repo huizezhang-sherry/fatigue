@@ -52,29 +52,39 @@ $$S_{t} = \beta_{0} + \beta_{1}Con_{t}*PointImpt$$
 or 
 $$S_{t} = \beta_{0} + \beta_{1}Con_{t} + \beta_{2}PointImpt$$
 
+```{r}
+# plot 
+conc <- function(t, phi,d){
+  conc <- d * exp(t * phi)
+  df <- tibble(t= t, conc = conc)
+  return(df)
+}
+
+t <- seq(1,100, 1)
+phi <- -0.01
+d <- c(rep(3, 49), 3.2, rep(3, 50))
+
+conc_plot <- conc(t, phi, d)
+ggplot(conc_plot) + geom_line(aes(x = t, y = conc))
+```
+
 
 
 ```{r result = "hide", comment = FALSE, message=FALSE, echo = FALSE}
-source("R/ExtractRecordall.R")
-source("R/importance.R")
-source("R/rest.R")
+source("../R/ExtractRecordall.R")
+source("../R/importance.R")
+source("../R/rest.R")
 
 library(ggplot2)
 library(tidyverse)
 ```
 
 
-```{r}
-ausopen %>% filter(GameNo == 1, match_num == 1112, SetNo ==1) %>% select(ElapsedTime, P1GamesWon, P2GamesWon, P1Score, P2Score, Speed_KMH, ServeIndicator, GameNo, SetNo) 
-
-ausopen %>% filter(GameNo == 2, match_num == 1112, SetNo ==1) %>% select(ElapsedTime, P1GamesWon, P2GamesWon, P1Score, P2Score, Speed_KMH, ServeIndicator, GameNo, SetNo) 
-```
-
 
 ```{r}
 # load and clean data
-Federer <- extract_records_all("data/2017-ausopen-matches.csv", 
-                               "data/2017-ausopen-points.csv", "Roger Federer")
+Federer <- extract_records_all("../data/2017-ausopen-matches.csv", 
+                               "../data/2017-ausopen-points.csv", "Roger Federer")
 Federer["brk_1"] = ifelse(rest(Federer) == 1.5, 1,0)
 Federer["brk_2"] = ifelse(rest(Federer) == 2, 1,0)
 Federer["impt"] = point_impt(Federer)
@@ -101,7 +111,7 @@ f <- f %>% mutate(t_n = (t-min(t))/(max(t)-min(t))) # treat point index to be be
 
 
 # additive model 
-```{r optimisation}
+```{r}
 # initialise concentration matrix 
 con = matrix(0, nrow = nrow(f), ncol = nrow(f))
 con_sum = matrix(0, nrow = nrow(f), ncol = 1)
@@ -153,7 +163,7 @@ ggplot(f_fitted_a, aes( x= t_n)) +
 
 
 # additive model 2 - add more variables 
-```{r optimisation}
+```{r}
 # initialise concentration matrix 
 con = matrix(0, nrow = nrow(f), ncol = nrow(f))
 con_sum = matrix(0, nrow = nrow(f), ncol = 1)
@@ -205,6 +215,9 @@ f_fitted_a_2 <- f %>% mutate(fitted = fit_a_2$par[1]+
                                fit_a_2$par[11]*f$rally) 
 
 # plot
+con_max
+
+
 ggplot(f_fitted_a_2, aes(fitted, speed)) + 
   geom_point() + 
   scale_x_continuous(limits = c(min(f_fitted_a_2$speed), max(f_fitted_a_2$speed))) + 
@@ -220,7 +233,7 @@ ggplot(f_fitted_a_2, aes( x= t_n)) +
 
 
 # additive model 3 - add more variables 
-```{r optimisation}
+```{r}
 # initialise concentration matrix 
 con = matrix(0, nrow = nrow(f), ncol = nrow(f))
 con_sum = matrix(0, nrow = nrow(f), ncol = 1)
