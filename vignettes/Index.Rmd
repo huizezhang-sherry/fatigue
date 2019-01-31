@@ -57,15 +57,50 @@ $$S_{t} = \beta_{0} + \beta_{1}Con_{t} + \beta_{2}PointImpt$$
 conc <- function(t, phi,d){
   conc <- d * exp(t * phi)
   df <- tibble(t= t, conc = conc)
-  return(df)
+  return(conc)
 }
 
+# baseline spec
 t <- seq(1,100, 1)
-phi <- -0.01
-d <- c(rep(3, 49), 3.2, rep(3, 50))
+phi_1 <- -0.01
+phi_2 <- -1.5
 
-conc_plot <- conc(t, phi, d)
-ggplot(conc_plot) + geom_line(aes(x = t, y = conc))
+d_1 <- c(rep(3, 100))
+d_3.2 <- c(rep(3.2,100))
+d_5 <- c(rep(5, 100))
+
+conc_3 <- conc(t, phi_1, d_1)
+conc_3.2 <- conc(t, phi_2, d_3.2)
+conc_5 <- conc(t, phi_2, d_5)
+
+conc_0<- data.frame(t, conc_3, conc_3.2, conc_5)
+
+
+# brk1&2 spec
+brk1 <- rep(c(0,0,0,0,1),20)
+brk2 <- rep(c(rep(0, 19),1),5)
+brk1 <- ifelse(brk2==1, 0, brk1)
+
+# compute lagged expoential for breaks
+brk1_index <- which(brk1 %in% 1)
+conc_brk1 = data.frame(matrix(nrow = 100, ncol =length(brk1_index)))
+for (i in 1: length(brk1_index)){
+  conc_brk1[,i] = c(rep(0, brk1_index[i]),conc_3.2)[1:length(conc_3.2)]
+}
+conc_brk1_sum <- rowSums(conc_brk1)
+
+
+brk2_index <- which(brk2 %in% 1)
+conc_brk2 = data.frame(matrix(nrow = 100, ncol =length(brk2_index)))
+for (i in 1: length(brk2_index)){
+  conc_brk2[,i] = c(rep(0, brk2_index[i]),conc_5)[1:length(conc_5)]
+}
+conc_brk2_sum <- rowSums(conc_brk2)
+
+# plot
+conc_plot <- cbind(conc_0, conc_brk1_sum, conc_brk2_sum)
+ggplot(conc_plot) + geom_line(aes(x = t, y = conc_3 + conc_brk1_sum + conc_brk2_sum))
+
 ```
 
 
