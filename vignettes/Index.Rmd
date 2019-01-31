@@ -100,6 +100,86 @@ conc_brk2_sum <- rowSums(conc_brk2)
 # plot
 conc_plot <- cbind(conc_0, conc_brk1_sum, conc_brk2_sum)
 ggplot(conc_plot) + geom_line(aes(x = t, y = conc_3 + conc_brk1_sum + conc_brk2_sum))
+```
+
+# fitting into data
+```{r}
+
+conc_brk1 = data.frame(matrix(nrow = nrow(f), ncol =length(brk1_index)))
+conc_brk2 = data.frame(matrix(nrow = nrow(f), ncol =length(brk2_index)))
+ll <- function(par, data){
+  conc_1 = par[4]*(exp(f$t_n*par[1]))
+  conc_2 = par[5]*(exp(f$t_n*par[2]))
+  conc_3 = par[6]*(exp(f$t_n*par[3]))
+  
+  for (i in 1: length(brk1_index)){
+    conc_brk1[,i] = c(rep(0,brk1_index[i]),conc_2)[1:nrow(f)]}
+  conc_brk1_sum <- rowSums(conc_brk1)
+  
+  for (i in 1: length(brk2_index)){
+    conc_brk2[,i] = c(rep(0,brk2_index[i]),conc_3)[1:nrow(f)]}
+  conc_brk2_sum <- rowSums(conc_brk2)
+  
+  con = conc_1 + conc_brk1_sum + conc_brk2_sum
+  
+  ss_pred = par[7] + par[8]*con 
+  u = f$speed - ss_pred
+  f <- -sum(log(dnorm(u, par[11], par[12])))
+  return(f)
+}
+
+ll(c(-6, -4,-3, 3, 3.2,5,180,20,10,10,0,10), f)
+fit <- optim(c(-0.1, -1, -1, 3,3.2, 5,180,20,10,10,0,10), ll, data = f)
+
+
+fit$par
+# fit <- optim(fit$par,ll, data = f)
+# fit$par
+phi_1 <- fit$par[1]
+phi_2 <- fit$par[2]
+phi_3 <- fit$par[3]
+
+conc_1 <- fit$par[4]*exp(f$t_n*phi_1)
+conc_2 <- fit$par[5]*exp(f$t_n*phi_2) 
+conc_3 <- fit$par[6]*exp(f$t_n*phi_3) 
+  
+plot(conc_2)
+
+
+
+
+
+# brk1&2 spec
+brk1 <- f$brk1
+brk2 <- f$brk2
+
+# compute lagged expoential for breaks
+brk1_index <- which(brk1 %in% 1)
+conc_brk1 = data.frame(matrix(nrow = nrow(f), ncol =length(brk1_index)))
+for (i in 1: length(brk1_index)){
+  conc_brk1[,i] = c(rep(0, brk1_index[i]),conc_2)[1:length(conc_2)]
+}
+conc_brk1_sum <- rowSums(conc_brk1)
+
+
+brk2_index <- which(brk2 %in% 1)
+conc_brk2 = data.frame(matrix(nrow = nrow(f), ncol =length(brk2_index)))
+for (i in 1: length(brk2_index)){
+  conc_brk2[,i] = c(rep(0, brk2_index[i]),conc_3)[1:length(conc_3)]
+}
+conc_brk2_sum <- rowSums(conc_brk2)
+
+# plot
+conc_0<- data.frame(f$t_n, conc_1, conc_2, conc_3)
+ggplot(conc_0) + geom_line(aes(x = f$t_n, y = conc_2))
+conc_plot <- cbind(conc_0, conc_brk1_sum, conc_brk2_sum)
+conc_plot <- conc_plot %>% mutate(con = conc_1 + conc_brk1_sum + conc_brk2_sum) %>% 
+  mutate(ss_pred = fit$par[7] + fit$par[8]*con)
+
+ggplot(conc_plot) + geom_line(aes(x = f.t_n, y = ss_pred)) + 
+  geom_vline(data = filter(conc_plot, brk1==1), aes(xintercept = f.t_n, alpha = 0.5), col = "red", linetype = "dashed") +
+  geom_vline(data = filter(conc_plot, brk2 ==1), aes(xintercept = f.t_n, alpha = 0.5), col = "blue")
+
 
 ```
 
@@ -138,7 +218,7 @@ f <- f %>% replace_na(list(impt = 0))
 f <- f %>% filter(match_num == 1112) %>% filter(speed != 0 )%>% 
   mutate(impt_low = ifelse(impt<median(impt), 1,0)) %>% 
   mutate(impt_high = ifelse(impt>=median(impt), 1,0))
-f <- f %>% mutate(t_n = (t-min(t))/(max(t)-min(t))) # treat point index to be between 0 and 1 to avoid computation problem in the exponential of concentration function 
+f <- f %>% mutate(t_n = (t-min(t))/(max(t)-min(t))*100) # treat point index to be between 0 and 1 to avoid computation problem in the exponential of concentration function 
 
 
 
