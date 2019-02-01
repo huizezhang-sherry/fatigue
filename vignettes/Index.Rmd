@@ -11,6 +11,44 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 ```
 
+
+```{r result = "hide", comment = FALSE, message=FALSE, echo = FALSE}
+source("../R/ExtractRecordall.R")
+source("../R/importance.R")
+source("../R/rest.R")
+
+library(ggplot2)
+library(tidyverse)
+```
+
+```{r}
+# load and clean data
+Federer <- extract_records_all("../data/2017-ausopen-matches.csv", 
+                               "../data/2017-ausopen-points.csv", "Roger Federer")
+Federer["brk_1"] = ifelse(rest(Federer) == 1.5, 1,0)
+Federer["brk_2"] = ifelse(rest(Federer) == 2, 1,0)
+Federer["impt"] = point_impt(Federer)
+
+f <- data.frame(brk1 = ifelse(rest(Federer) == 1.5, 1,0), 
+                brk2 = ifelse(rest(Federer) == 2, 1,0), 
+                impt = Federer$impt, 
+                t = Federer$PointNumber, 
+                match_num = Federer$match_num,
+                speed = Federer$Speed_KMH,
+                dist = Federer$dist,
+                rally = lag(Federer$RallyCount), 
+                GameNo = Federer$GameNo,
+                ServeNo = Federer$ServeNumber)
+f <- f %>% replace_na(list(impt = 0))
+f <- f %>% filter(match_num == 1112) %>% filter(speed != 0 )%>% 
+  mutate(impt_low = ifelse(impt<median(impt), 1,0)) %>% 
+  mutate(impt_high = ifelse(impt>=median(impt), 1,0))
+f <- f %>% mutate(t_n = (t-min(t))/(max(t)-min(t))*100) # treat point index to be between 0 and 1 to avoid computation problem in the exponential of concentration function 
+
+
+```
+
+
 # Model
 
 ## Dose: $d$ 
@@ -29,7 +67,7 @@ That is to say, $d_i$ can only take three different values: $\beta_0 $, $\beta_0
 Overall, we expect the serving speed of a player follows an exponential decay.
 $$d_1*e^{t \phi_{1}$$
 
-```{r plot_original_decay echo = FALSE}
+```{r plot_original_decay, echo = FALSE}
 conc <- function(t, phi,d){
   conc <- d * exp(t * phi)
   df <- tibble(t= t, conc = conc)
@@ -50,7 +88,7 @@ ggplot(conc_0) + geom_line(aes(t, conc_3))
 
 When a dose $i$ is injected into the body of the player (there's a break), another exponential decay of the same form but different parameters is added up to the original exponential function.  
 
-```{r plot_the_function echo = FALSE}
+```{r plot_the_function, echo = FALSE}
 # plot 
 conc <- function(t, phi,d){
   conc <- d * exp(t * phi)
@@ -135,8 +173,8 @@ ll <- function(par, data){
   return(f)
 }
 
-ll(c(-0.1,-1,-2,3,3.2,5,160,10,0,20), f)
-fit <- optim(c(-0.1,-1,-2,3,3,3,160,20,0,10), ll, data = f)
+ll(c(-0.1,-1,-2,3,3.2,5,180,10,0,20), f)
+fit <- optim(c(-0.1,-1,-2,3,3,3,180,20,0,10), ll, data = f)
 
 
 fit$par
@@ -319,43 +357,7 @@ ggplot(conc_plot) + geom_line(aes(x = f.t_n, y = ss_pred)) +
 
 
 
-```{r result = "hide", comment = FALSE, message=FALSE, echo = FALSE}
-source("R/ExtractRecordall.R")
-source("R/importance.R")
-source("R/rest.R")
 
-library(ggplot2)
-library(tidyverse)
-```
-
-
-
-```{r}
-# load and clean data
-Federer <- extract_records_all("data/2017-ausopen-matches.csv", 
-                               "data/2017-ausopen-points.csv", "Roger Federer")
-Federer["brk_1"] = ifelse(rest(Federer) == 1.5, 1,0)
-Federer["brk_2"] = ifelse(rest(Federer) == 2, 1,0)
-Federer["impt"] = point_impt(Federer)
-
-f <- data.frame(brk1 = ifelse(rest(Federer) == 1.5, 1,0), 
-                brk2 = ifelse(rest(Federer) == 2, 1,0), 
-                impt = Federer$impt, 
-                t = Federer$PointNumber, 
-                match_num = Federer$match_num,
-                speed = Federer$Speed_KMH,
-                dist = Federer$dist,
-                rally = lag(Federer$RallyCount), 
-                GameNo = Federer$GameNo,
-                ServeNo = Federer$ServeNumber)
-f <- f %>% replace_na(list(impt = 0))
-f <- f %>% filter(match_num == 1112) %>% filter(speed != 0 )%>% 
-  mutate(impt_low = ifelse(impt<median(impt), 1,0)) %>% 
-  mutate(impt_high = ifelse(impt>=median(impt), 1,0))
-f <- f %>% mutate(t_n = (t-min(t))/(max(t)-min(t))*100) # treat point index to be between 0 and 1 to avoid computation problem in the exponential of concentration function 
-
-
-```
 
 
 # additive model 
