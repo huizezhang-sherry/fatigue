@@ -26,6 +26,9 @@ point_impt <- function(dt){
     #i.e. if the current match score is 4-6 for server, serve_game = 4, return_game = 6
   # serve_set/return_set: the current set score of the server/returner 
     # i.e. if the currnet set score is 0-2 for server, serve_set = 0, return_set = 2
+  temp2 <- temp2 %>% group_by(match_num) %>% 
+    mutate(P1GamesWon = ifelse(duplicated(SetNo, fromLast = TRUE),P1GamesWon,0))%>% 
+    mutate(P2GamesWon = ifelse(duplicated(SetNo, fromLast = TRUE),P2GamesWon,0))
   
   temp3 <- temp2 %>% 
     mutate(serve_point = as.numeric(ifelse(ServeIndicator == 1, P1Score, P2Score))) %>% 

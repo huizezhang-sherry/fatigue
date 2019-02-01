@@ -32,12 +32,18 @@ extract_records_all <- function(dt1, dt2, name){
     mutate(MatchNo = as.factor(substr(dt$match_num,2,2))) %>%
     mutate(time = c(0,as.vector(diff(dt$ElapsedTime)))) %>%
     mutate(cum_time = cumsum(time)/60) %>% 
+    mutate(GameNoLEAD= lead(GameNo)) %>% 
     select(-status, -winner, -event_name, -court_name, -court_id, -player1id, 
            -player2id, -nation1, -nation2, -Rally, -P1Momentum, -P2Momentum,
            -P1FirstSrvIn, -P2FirstSrvIn, -P1FirstSrvWon, -P2FirstSrvWon, 
            -P1SecondSrvIn, -P2SecondSrvIn, -P1SecondSrvWon, -P2SecondSrvWon, 
            -P1ForcedError, -P2ForcedError, -Winner_FH, -Winner_BH, -ServingTo,
            -P1TurningPoint, -P2TurningPoint)
+  
+  
+  dt <- dt %>% group_by(match_num) %>%  
+    mutate(GameNo = ifelse(duplicated(SetNo,fromLast = TRUE), GameNoLEAD,GameNo))
+  
 
   return(dt)
 }
