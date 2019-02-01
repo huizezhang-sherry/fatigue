@@ -174,7 +174,7 @@ ll <- function(par, data){
 }
 
 ll(c(-0.1,-1,-2,3,3.2,5,180,10,0,20), f)
-fit <- optim(c(-0.1,-1,-2,3,3,3,180,20,0,10), ll, data = f)
+fit <- optim(c(-0.02, -0.01,-0.01,6,3,5,180,10,0,20), ll, data = f)
 
 
 fit$par
@@ -236,8 +236,7 @@ ggplot(conc_plot) + geom_line(aes(x = f.t_n, y = ss_pred)) +
   geom_vline(data = filter(conc_plot, brk1==1), 
              aes(xintercept = f.t_n, alpha = 0.5), col = "red", linetype = "dashed") +
   geom_vline(data = filter(conc_plot, brk2 ==1), 
-             aes(xintercept = f.t_n, alpha = 0.5), col = "blue") + 
-  scale_y_continuous(limit = c(160, 170))
+             aes(xintercept = f.t_n, alpha = 0.5), col = "blue") 
 
 
 
