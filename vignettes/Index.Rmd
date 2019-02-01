@@ -361,7 +361,7 @@ ggplot(conc_plot) + geom_line(aes(x = f.t_n, y = ss_pred)) +
 
 
 # additive model 
-```{r}
+```{r eval = FALSE}
 # initialise concentration matrix 
 con = matrix(0, nrow = nrow(f), ncol = nrow(f))
 con_sum = matrix(0, nrow = nrow(f), ncol = 1)
@@ -413,7 +413,7 @@ ggplot(f_fitted_a, aes( x= t_n)) +
 
 
 # additive model 2 - add more variables 
-```{r}
+```{r eval = FALSE}
 # initialise concentration matrix 
 con = matrix(0, nrow = nrow(f), ncol = nrow(f))
 con_sum = matrix(0, nrow = nrow(f), ncol = 1)
@@ -483,7 +483,7 @@ ggplot(f_fitted_a_2, aes( x= t_n)) +
 
 
 # additive model 3 - add more variables 
-```{r}
+```{r eval = FALSE}
 # initialise concentration matrix 
 con = matrix(0, nrow = nrow(f), ncol = nrow(f))
 con_sum = matrix(0, nrow = nrow(f), ncol = 1)
@@ -548,7 +548,7 @@ ggplot(f_fitted_a_3, aes(x= t_n)) +
   geom_vline(data = filter(f_fitted_a, brk2 ==1), aes(xintercept = t_n, alpha = 0.5), col = "blue")
 ```
 
-```{r}
+```{r eval = FALSE}
 # example to follow 
 square_err <- function(par, data) {
   sq <- sum((data$y-(par[1]+par[2]*data$x+par[3]*data$x^2+par[4]*data$x^3))^2)
@@ -564,7 +564,7 @@ ggplot(df, aes(x=x, y=y)) + geom_point() +
 
 
 # multiplicative model 
-```{r}
+```{r eval =FALSE}
 # initialise concentration matrix 
 con = matrix(0, nrow = nrow(f), ncol = nrow(f))
 con_sum = matrix(0, nrow = nrow(f), ncol = 1)
@@ -625,7 +625,7 @@ Parameters: $\beta_{0j}$, $\beta_{1j}$, $\beta_{2j}$, $\phi$,$b_{0j}$, $b_{1j}$,
 
 Data: $brk_1$, $brk_2$, $PointImpt$, $t$
 
-```{r grid serach}
+```{r grid_serach, eval =FALSE}
 # initialise matrix 
 con = matrix(nrow = nrow(data), ncol = nrow(data))
 con_sum = matrix(nrow = nrow(data), ncol =1)
