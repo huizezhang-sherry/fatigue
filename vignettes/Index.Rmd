@@ -21,33 +21,6 @@ library(ggplot2)
 library(tidyverse)
 ```
 
-```{r}
-# load and clean data
-Federer <- extract_records_all("../data/2017-ausopen-matches.csv", 
-                               "../data/2017-ausopen-points.csv", "Roger Federer")
-Federer["brk_1"] = ifelse(rest(Federer) == 1.5, 1,0)
-Federer["brk_2"] = ifelse(rest(Federer) == 2, 1,0)
-Federer["impt"] = point_impt(Federer)
-
-f <- data.frame(brk1 = ifelse(rest(Federer) == 1.5, 1,0), 
-                brk2 = ifelse(rest(Federer) == 2, 1,0), 
-                impt = Federer$impt, 
-                t = Federer$PointNumber, 
-                match_num = Federer$match_num,
-                speed = Federer$Speed_KMH,
-                dist = Federer$dist,
-                rally = lag(Federer$RallyCount), 
-                GameNo = Federer$GameNo,
-                ServeNo = Federer$ServeNumber)
-f <- f %>% replace_na(list(impt = 0))
-f <- f %>% filter(match_num == 1112) %>% filter(speed != 0 )%>% 
-  mutate(impt_low = ifelse(impt<median(impt), 1,0)) %>% 
-  mutate(impt_high = ifelse(impt>=median(impt), 1,0))
-f <- f %>% mutate(t_n = (t-min(t))/(max(t)-min(t))*100) # treat point index to be between 0 and 1 to avoid computation problem in the exponential of concentration function 
-
-
-```
-
 
 # Model
 
@@ -135,7 +108,7 @@ conc_brk2_sum <- rowSums(conc_brk2)
 
 # plot
 conc_plot <- cbind(conc_0, conc_brk1_sum, conc_brk2_sum)
-ggplot(conc_plot) + geom_line(aes(x = t, y = conc_3 + conc_brk1_sum + conc_brk2_sum))
+ggplot(conc_plot) + geom_line(aes(x = t, y = conc_3 + conc_brk1_sum +conc_brk2_sum))
 ```
 
 
@@ -146,16 +119,62 @@ $$S_{t} = \beta_{0} + \beta_{1}Con_{t}*PointImpt$$
 or 
 $$S_{t} = \beta_{0} + \beta_{1}Con_{t} + \beta_{2}PointImpt$$
 
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+# load and clean data
+Alex <- extract_records_all("../data/2017-ausopen-matches.csv", 
+                               "../data/2017-ausopen-points.csv", "Alexander Zverev")
 
-# fitting into data
-```{r}
+Alex["impt"] = point_impt(Alex)
 
+f <- data.frame(brk1 = ifelse(rest(Alex) == 1.5, 1,0), 
+                brk2 = ifelse(rest(Alex) == 2, 1,0), 
+                impt = Alex$impt, 
+                t = Alex$PointNumber, 
+                match_num = Alex$match_num,
+                speed = Alex$Speed_KMH,
+                GameNo = Alex$GameNo,
+                ServeNo = Alex$ServeNumber)
+f <- f %>% replace_na(list(impt = 0))
+
+ggplot(f) + geom_histogram(aes(x = impt))
+
+f <- f %>% filter(match_num == 1310) %>% filter(speed != 0 )%>% 
+  mutate(impt_low = ifelse(impt<0.1, 1,0)) %>% 
+  mutate(impt_high = ifelse(impt>=0.1, 1,0))
+
+f <- f %>% mutate(t_n = (t-min(t))/(max(t)-min(t))*100) # treat point index to be between 0 and 1 to avoid computation problem in the exponential of concentration function 
+
+f <- f %>% 
+  mutate(firstserve_index = ifelse(ServeNo ==1, 1,0 ))
+
+
+ggplot(f) + 
+  geom_point(aes(x = t_n, y = speed, col = as.factor(ServeNo))) +
+  geom_point(data = subset(f, impt_high ==1), aes(x = t_n, y = speed)) +
+  geom_vline(data =filter(f, brk1 ==1), 
+             aes(xintercept = t_n, alpha = 0.5), col = "grey", linetype = "dashed") + 
+  geom_vline(data = filter(f, brk2 ==1), 
+             aes(xintercept = t_n, alpha = 0.5), col = "black", linetype = "dashed") + 
+  scale_y_continuous(breaks = c(140,160,180,200, 220)) + 
+  theme(legend.position = "none")
+
+```
+
+# mle maximisation
+```{r echo = FALSE, result = FALSE}
+# brk1&2 spec
+brk1 <- f$brk1
+brk2 <- f$brk2
+brk1_index <- which(brk1 %in% 1)
 conc_brk1 = data.frame(matrix(nrow = nrow(f), ncol =length(brk1_index)))
+brk2_index <- which(brk2 %in% 1)
 conc_brk2 = data.frame(matrix(nrow = nrow(f), ncol =length(brk2_index)))
+
+
 ll <- function(par, data){
   conc_1 = par[4]*(exp(f$t_n*par[1]))
   conc_2 = par[5]*(exp(f$t_n*par[2]))
-  conc_3 = par[6]*(exp(f$t_n*par[3]))
+  conc_3 = (par[5] + par[6])*(exp(f$t_n*par[3]))
   
   for (i in 1: length(brk1_index)){
     conc_brk1[,i] = c(rep(0,brk1_index[i]),conc_2)[1:nrow(f)]}
@@ -165,87 +184,166 @@ ll <- function(par, data){
     conc_brk2[,i] = c(rep(0,brk2_index[i]),conc_3)[1:nrow(f)]}
   conc_brk2_sum <- rowSums(conc_brk2)
   
-  con = conc_1 + conc_brk1_sum + conc_brk2_sum
+  ss_pred = par[7] + conc_1 + conc_brk1_sum + conc_brk2_sum+ 
+    par[8]*f$impt_high +par[9]*f$firstserve_index
   
-  ss_pred = par[7] + par[8]*con 
   u = f$speed - ss_pred
-  f <- -sum(log(dnorm(u, par[9], par[10])))
+  f <- -sum(log(dnorm(u, par[10], par[11])))
   return(f)
 }
 
-ll(c(-0.1,-1,-2,3,3.2,5,180,10,0,20), f)
-fit <- optim(c(-0.02, -0.01,-0.01,6,3,5,180,10,0,20), ll, data = f)
+
+fit_1 <- optim(c(-0.9,-5,-5,10,10,10, 
+                 160, 10, 10, 5,20), 
+               ll,method= "L-BFGS-B", data = f,
+               lower = c(-0.09, -Inf, -Inf, 0,0,0, -Inf, -Inf, -Inf, -Inf,-Inf), 
+               upper = c(-0.0000001,0,0,20,20,20,Inf, Inf, Inf, Inf, Inf))
+# fit_1 <- optim(c(-0.9,-1.5,-1.5,5,5,5,180,10,10,10,30,10,20), 
+#                ll,method= "L-BFGS-B", data = f,
+#                lower = c(-0.09, -5, -5, 0,0,0, -Inf, -Inf,-Inf, -Inf, -Inf, -Inf,-Inf), 
+#                upper = c(-0.0000001,0,0,20,20,20,Inf, Inf,Inf,Inf, Inf, Inf, Inf))
 
 
-fit$par
-fit <- optim(fit$par,ll, data = f)
-fit$par
-phi_1 <- fit$par[1]
-phi_2 <- fit$par[2]
-phi_3 <- fit$par[3]
 
-conc_1 <- fit$par[4]*exp(f$t_n*phi_1)
-conc_2 <- fit$par[5]*exp(f$t_n*phi_2) 
-conc_3 <- fit$par[6]*exp(f$t_n*phi_3) 
-conc_exp <- data.frame(f$t_n, conc_1, conc_2, conc_3)
+fit_1$par
 
-p1 <- ggplot(conc_exp) + geom_line(aes(x = f.t_n, y = conc_1)) 
-p2 <- ggplot(conc_exp) + geom_line(aes(x = f.t_n, y = conc_2)) 
-p3 <- ggplot(conc_exp) + geom_line(aes(x = f.t_n, y = conc_3)) 
+```
+
+# fitting_model
+```{r  echo = FALSE, result = FALSE}
+conc_1<- fit_1$par[4]*exp(f$t_n*fit_1$par[1])
+conc_2<- fit_1$par[5]*exp(f$t_n*fit_1$par[2]) 
+conc_3 <- (fit_1$par[5] + fit_1$par[6])*exp(f$t_n*fit_1$par[3]) 
+
+conc_exp <- cbind(f, conc_1, conc_2,conc_3)
+
+p1 <- ggplot(conc_exp) + geom_line(aes(x = t_n, y = conc_1)) 
+p2 <- ggplot(conc_exp) + geom_line(aes(x = t_n, y = conc_2)) + 
+  scale_x_continuous(limit = c(0, 10), breaks = c(0,2,4,6,8,10))
+p3 <- ggplot(conc_exp) + geom_line(aes(x = t_n, y = conc_3)) +
+  scale_x_continuous(limit = c(0, 10), breaks = c(0,2,4,6,8,10))
 gridExtra::grid.arrange(p1,p2,p3, nrow = 3)
 
 
-# brk1&2 spec
-brk1 <- f$brk1
-brk2 <- f$brk2
+
 
 # compute lagged expoential for breaks
-brk1_index <- which(brk1 %in% 1)
-conc_brk1 = data.frame(matrix(nrow = nrow(f), ncol =length(brk1_index)))
+
+
 for (i in 1: length(brk1_index)){
   conc_brk1[,i] = c(rep(0, brk1_index[i]),conc_2)[1:length(conc_2)]
 }
 conc_brk1_sum <- rowSums(conc_brk1)
 
 
-brk2_index <- which(brk2 %in% 1)
-conc_brk2 = data.frame(matrix(nrow = nrow(f), ncol =length(brk2_index)))
 for (i in 1: length(brk2_index)){
   conc_brk2[,i] = c(rep(0, brk2_index[i]),conc_3)[1:length(conc_3)]
 }
 conc_brk2_sum <- rowSums(conc_brk2)
 
-# plot
-conc_0<- data.frame(f$t_n, conc_1, conc_2, conc_3, f$speed)
-conc_plot <- cbind(conc_0, conc_brk1_sum, conc_brk2_sum)
-conc_plot <- conc_plot %>% mutate(con = conc_1 + conc_brk1_sum + conc_brk2_sum) %>% 
-  mutate(ss_pred = fit$par[7] + fit$par[8]*con)
 
-
-ggplot(conc_plot, aes(y= ss_pred, x = f.speed)) + 
-  geom_point() + 
-  scale_x_continuous(limits = c(min(conc_plot$f.speed), max(conc_plot$f.speed))) + 
-  scale_y_continuous(limits = c(min(conc_plot$f.speed), max(conc_plot$f.speed))) + 
-  theme(aspect.ratio=1) 
-
-ggplot(conc_plot, aes(x = f.t_n)) + 
-  geom_point(aes(y = ss_pred, col = "red")) + 
-  geom_point(aes( y = f.speed))
-
-ggplot(conc_plot) + geom_line(aes(x = f.t_n, y = ss_pred)) + 
-  geom_vline(data = filter(conc_plot, brk1==1), 
-             aes(xintercept = f.t_n, alpha = 0.5), col = "red", linetype = "dashed") +
-  geom_vline(data = filter(conc_plot, brk2 ==1), 
-             aes(xintercept = f.t_n, alpha = 0.5), col = "blue") 
-
-
+conc_plot<- cbind(conc_exp, conc_brk1_sum, conc_brk2_sum)
+conc_plot <- conc_plot %>% 
+  mutate(base = fit_1$par[7] + conc_1 +fit_1$par[9]*f$firstserve_index) %>% 
+  mutate(base_brk1 = fit_1$par[7] + conc_1 +conc_brk1_sum + 
+           fit_1$par[9]*f$firstserve_index) %>% 
+  mutate(base_brk2 = fit_1$par[7] + conc_1 +conc_brk2_sum + 
+           fit_1$par[9]*f$firstserve_index) %>% 
+  mutate(ss_pred_no_impt = fit_1$par[7] + conc_1 +conc_brk1_sum + conc_brk2_sum + 
+           fit_1$par[9]*f$firstserve_index) %>% 
+  mutate(ss_pred_w_impt = fit_1$par[7] + conc_1 +conc_brk1_sum + conc_brk2_sum + 
+           fit_1$par[8]*f$impt_high + 
+           fit_1$par[9]*f$firstserve_index) 
 
 ```
 
 
-# ADDING MORE VARIABLES 
-```{r}
+# result
+```{r  echo = FALSE} 
+ggplot(conc_plot, aes(x = t_n)) + 
+  geom_line(data = subset(conc_plot, ss_pred_w_impt >170), aes(y = base)) + 
+  geom_line(data = subset(conc_plot, ss_pred_w_impt <170), aes(y = base))
 
+ggplot(conc_plot, aes(x= t_n)) + 
+  geom_line(data = subset(conc_plot, ss_pred_no_impt >170), aes(y = base_brk1)) +
+  geom_line(data = subset(conc_plot, ss_pred_no_impt <170), aes(y = base_brk1)) +
+  geom_vline(data = filter(conc_plot, brk1==1),
+             aes(xintercept = t_n, alpha = 0.5), col = "red", linetype = "dashed") +
+  geom_vline(data = filter(conc_plot, brk2 ==1), 
+             aes(xintercept = t_n, alpha = 0.5), col = "blue") + 
+  theme(legend.position = "none") 
+
+ggplot(conc_plot, aes(x= t_n)) + 
+  geom_line(data = subset(conc_plot, ss_pred_w_impt >175), aes(y = base), linetype = "dashed") +
+  geom_line(data = subset(conc_plot, ss_pred_w_impt <175), aes(y = base), linetype = "dashed") +
+  geom_line(data = subset(conc_plot, ss_pred_w_impt >175), aes(y = base_brk2)) +
+  geom_line(data = subset(conc_plot, ss_pred_w_impt <175), aes(y = base_brk2)) +
+  geom_vline(data = filter(conc_plot, brk1==1),
+             aes(xintercept = t_n, alpha = 0.5), col = "red", linetype = "dashed") +
+  geom_vline(data = filter(conc_plot, brk2 ==1), 
+             aes(xintercept = t_n, alpha = 0.5), col = "blue") + 
+  theme(legend.position = "none") 
+
+ggplot(conc_plot, aes(x= t_n)) + 
+  geom_line(data = subset(conc_plot, ss_pred_w_impt >175), aes(y = base), linetype = "dashed") +
+  geom_line(data = subset(conc_plot, ss_pred_w_impt <175), aes(y = base), linetype = "dashed") +
+  geom_line(data = subset(conc_plot, ss_pred_w_impt >175), aes(y = ss_pred_no_impt)) +
+  geom_line(data = subset(conc_plot, ss_pred_w_impt <175), aes(y = ss_pred_no_impt)) +
+  geom_vline(data = filter(conc_plot, brk1==1),
+             aes(xintercept = t_n, alpha = 0.5), col = "red", linetype = "dashed") +
+  geom_vline(data = filter(conc_plot, brk2 ==1), 
+             aes(xintercept = t_n, alpha = 0.5), col = "blue") + 
+  theme(legend.position = "none") 
+
+ggplot(conc_plot, aes(x= t_n)) + 
+  geom_line(data = subset(conc_plot, ss_pred_w_impt >175), aes(y = base), linetype = "dashed") +
+  geom_line(data = subset(conc_plot, ss_pred_w_impt <175), aes(y = base), linetype = "dashed") +
+  geom_line(data = subset(conc_plot, ss_pred_w_impt >175), aes(y = ss_pred_w_impt)) +
+  geom_line(data = subset(conc_plot, ss_pred_w_impt <175), aes(y = ss_pred_w_impt)) +
+  geom_vline(data = filter(conc_plot, brk1==1),
+             aes(xintercept = t_n, alpha = 0.5), col = "red", linetype = "dashed") +
+  geom_vline(data = filter(conc_plot, brk2 ==1), 
+             aes(xintercept = t_n, alpha = 0.5), col = "blue") + 
+  theme(legend.position = "none") 
+
+
+# degree of fit 
+ggplot(conc_plot, aes(y= ss_pred_w_impt, x = speed)) + 
+  geom_point() +
+  scale_x_continuous(limit = c(min(conc_plot$speed), max(conc_plot$speed))) + 
+  scale_y_continuous(limit = c(min(conc_plot$speed), max(conc_plot$speed))) + 
+  geom_abline(slope =1, intercept =0) +
+  ylab("pred_speed")
+
+ggplot(conc_plot, aes(x = t_n)) + 
+  scale_color_brewer(palette="Dark2") + 
+  geom_line(data = subset(conc_plot, ss_pred_w_impt >165), 
+            aes(y = ss_pred_no_impt, col = as.factor(ServeNo))) + 
+  geom_line(data = subset(conc_plot, ss_pred_w_impt <165), 
+            aes(y = ss_pred_no_impt, col = as.factor(ServeNo))) + 
+  geom_point(aes( y = speed, col = as.factor(ServeNo))) + 
+  geom_vline(data = filter(conc_plot, brk1==1),
+             aes(xintercept = t_n, alpha = 0.5), col = "red", linetype = "dashed") +
+  geom_vline(data = filter(conc_plot, brk2 ==1), 
+             aes(xintercept = t_n, alpha = 0.5), col = "blue") + 
+  theme(legend.position = "none")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ADDING MORE VARIABLES 
+```{r eval = FALSE, echo = FALSE}
 conc_brk1 = data.frame(matrix(nrow = nrow(f), ncol =length(brk1_index)))
 conc_brk2 = data.frame(matrix(nrow = nrow(f), ncol =length(brk2_index)))
 ll <- function(par, data){
@@ -263,7 +361,7 @@ ll <- function(par, data){
   
   con = conc_1 + conc_brk1_sum + conc_brk2_sum
   
-  ss_pred = par[7] + par[8]*con + par[9]*f$impt_high + par[10]*f$impt_low + par[11]*f$rally
+  ss_pred = par[7] + par[8]*con + par[9]*f$impt_high + par[10]*f$impt_low 
   u = f$speed - ss_pred
   f <- -sum(log(dnorm(u, par[12], par[13])))
   return(f)
@@ -338,29 +436,8 @@ ggplot(conc_plot) + geom_line(aes(x = f.t_n, y = ss_pred)) +
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # additive model 
-```{r eval = FALSE}
+```{r eval = FALSE, echo = FALSE}
 # initialise concentration matrix 
 con = matrix(0, nrow = nrow(f), ncol = nrow(f))
 con_sum = matrix(0, nrow = nrow(f), ncol = 1)
@@ -412,7 +489,7 @@ ggplot(f_fitted_a, aes( x= t_n)) +
 
 
 # additive model 2 - add more variables 
-```{r eval = FALSE}
+```{r eval = FALSE, echo = FALSE}
 # initialise concentration matrix 
 con = matrix(0, nrow = nrow(f), ncol = nrow(f))
 con_sum = matrix(0, nrow = nrow(f), ncol = 1)
@@ -482,7 +559,7 @@ ggplot(f_fitted_a_2, aes( x= t_n)) +
 
 
 # additive model 3 - add more variables 
-```{r eval = FALSE}
+```{r eval = FALSE, echo = FALSE}
 # initialise concentration matrix 
 con = matrix(0, nrow = nrow(f), ncol = nrow(f))
 con_sum = matrix(0, nrow = nrow(f), ncol = 1)
@@ -547,7 +624,7 @@ ggplot(f_fitted_a_3, aes(x= t_n)) +
   geom_vline(data = filter(f_fitted_a, brk2 ==1), aes(xintercept = t_n, alpha = 0.5), col = "blue")
 ```
 
-```{r eval = FALSE}
+```{r eval = FALSE, echo = FALSE}
 # example to follow 
 square_err <- function(par, data) {
   sq <- sum((data$y-(par[1]+par[2]*data$x+par[3]*data$x^2+par[4]*data$x^3))^2)
@@ -563,7 +640,7 @@ ggplot(df, aes(x=x, y=y)) + geom_point() +
 
 
 # multiplicative model 
-```{r eval =FALSE}
+```{r eval =FALSE, echo = FALSE}
 # initialise concentration matrix 
 con = matrix(0, nrow = nrow(f), ncol = nrow(f))
 con_sum = matrix(0, nrow = nrow(f), ncol = 1)
@@ -624,7 +701,7 @@ Parameters: $\beta_{0j}$, $\beta_{1j}$, $\beta_{2j}$, $\phi$,$b_{0j}$, $b_{1j}$,
 
 Data: $brk_1$, $brk_2$, $PointImpt$, $t$
 
-```{r grid_serach, eval =FALSE}
+```{r grid_serach, eval =FALSE, echo = FALSE}
 # initialise matrix 
 con = matrix(nrow = nrow(data), ncol = nrow(data))
 con_sum = matrix(nrow = nrow(data), ncol =1)
@@ -690,22 +767,25 @@ ggplot(g, aes(x=x, y=y, fill=f)) + geom_tile() + xlab(expression(mu)) + ylab(exp
 ```
 
 
+```{r result = FALSE, echo = FALSE}
 
 
-# Prior
-$$\beta_{ij} \sim N(??????????????), i = 0,1,2$$
-$$\phi \sim Gamma(a, b)$$ 
-$$S_{ij} \sim N(\mu, \sigma^2)$$
-The shape parameter $k_j$ has a prior distribution $k_j \sim Gamma(c,d)$
-https://www.hindawi.com/journals/jps/2011/437472/
-
-prior for $\theta_j$?????????
-
-
-# Define Index 
-Proportion of lose of speed comparing to the start of the game 
-
-
+# # Prior
+# $$\beta_{ij} \sim N(??????????????), i = 0,1,2$$
+# $$\phi \sim Gamma(a, b)$$ 
+# $$S_{ij} \sim N(\mu, \sigma^2)$$
+# The shape parameter $k_j$ has a prior distribution $k_j \sim Gamma(c,d)$
+# https://www.hindawi.com/journals/jps/2011/437472/
+# 
+# prior for $\theta_j$?????????
+# 
+# 
+# # Define Index 
+# Proportion of lose of speed comparing to the start of the game 
 
 
 
+
+
+
+```
