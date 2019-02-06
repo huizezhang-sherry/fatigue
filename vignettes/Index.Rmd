@@ -228,8 +228,6 @@ gridExtra::grid.arrange(p1,p2,p3, nrow = 3)
 
 
 # compute lagged expoential for breaks
-
-
 for (i in 1: length(brk1_index)){
   conc_brk1[,i] = c(rep(0, brk1_index[i]),conc_2)[1:length(conc_2)]
 }
